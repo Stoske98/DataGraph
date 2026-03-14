@@ -1,0 +1,21 @@
+{
+    "name": "DataGraph.Editor",
+    "rootNamespace": "DataGraph.Editor",
+    "references": [
+        "DataGraph.Runtime",
+        "DataGraph.Editor.Public",
+        "Unity.GraphToolkit.Editor",
+        "Unity.GraphToolkit.Common.Editor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

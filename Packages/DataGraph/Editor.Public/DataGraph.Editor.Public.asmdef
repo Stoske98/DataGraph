@@ -1,0 +1,18 @@
+{
+    "name": "DataGraph.Editor.Public",
+    "rootNamespace": "DataGraph.Editor.Public",
+    "references": [
+        "DataGraph.Runtime"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

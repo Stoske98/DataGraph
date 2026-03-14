@@ -1,0 +1,19 @@
+{
+    "name": "DataGraph.GoogleSheets",
+    "rootNamespace": "DataGraph.GoogleSheets",
+    "references": [
+        "DataGraph.Runtime",
+        "DataGraph.Editor.Public"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
