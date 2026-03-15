@@ -1,0 +1,24 @@
+{
+  "1": {
+    "name": "Sword",
+    "rewards": [
+      {
+        "itemId": 10,
+        "qty": 1
+      },
+      {
+        "itemId": 20,
+        "qty": 3
+      }
+    ]
+  },
+  "2": {
+    "name": "Shield",
+    "rewards": [
+      {
+        "itemId": 30,
+        "qty": 5
+      }
+    ]
+  }
+}

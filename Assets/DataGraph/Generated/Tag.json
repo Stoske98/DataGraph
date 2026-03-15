@@ -1,0 +1,17 @@
+{
+  "1": {
+    "name": "Weapon",
+    "keywords": [
+      "sword",
+      "axe",
+      "bow"
+    ]
+  },
+  "2": {
+    "name": "Armor",
+    "keywords": [
+      "shield",
+      "helmet"
+    ]
+  }
+}

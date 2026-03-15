@@ -1,0 +1,11 @@
+{
+  "menu.start": {
+    "text": "Start Game"
+  },
+  "menu.quit": {
+    "text": "Quit"
+  },
+  "ui.health": {
+    "text": "Health"
+  }
+}
