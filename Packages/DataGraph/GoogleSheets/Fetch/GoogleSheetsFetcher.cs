@@ -1,8 +1,10 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+
 using DataGraph.GoogleSheets.Auth;
 using DataGraph.Runtime;
+
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -83,27 +85,27 @@ namespace DataGraph.GoogleSheets.Fetch
         {
             try
             {
-                var response = JsonUtility.FromJson<SheetsValuesResponse>(json);
+                var values = ParseValuesArray(json);
 
-                if (response?.values == null || response.values.Length == 0)
+                if (values == null || values.Count == 0)
                     return Result<RawTableData>.Failure("Sheet returned no data.");
 
-                if (response.values.Length <= headerRowOffset)
+                if (values.Count <= headerRowOffset)
                     return Result<RawTableData>.Failure(
-                        $"Sheet has {response.values.Length} rows but header offset " +
+                        $"Sheet has {values.Count} rows but header offset " +
                         $"is {headerRowOffset}. No data rows available.");
 
-                var headerRow = headerRowOffset > 0 && headerRowOffset <= response.values.Length
-                    ? response.values[headerRowOffset - 1]
+                var headerRow = headerRowOffset > 0 && headerRowOffset <= values.Count
+                    ? values[headerRowOffset - 1]
                     : GenerateDefaultHeaders(
-                        response.values.Length > 0 ? response.values[0].Length : 0);
+                        values.Count > 0 ? values[0].Length : 0);
 
                 int dataStartRow = headerRowOffset;
-                int dataRowCount = response.values.Length - dataStartRow;
+                int dataRowCount = values.Count - dataStartRow;
                 var dataRows = new string[dataRowCount][];
 
                 for (int i = 0; i < dataRowCount; i++)
-                    dataRows[i] = response.values[dataStartRow + i];
+                    dataRows[i] = values[dataStartRow + i];
 
                 return Result<RawTableData>.Success(
                     new RawTableData(dataRows, headerRow));
@@ -115,6 +117,140 @@ namespace DataGraph.GoogleSheets.Fetch
             }
         }
 
+        /// <summary>
+        /// Manually parses the "values" field from Google Sheets API JSON response.
+        /// JsonUtility cannot handle string[][] so we parse it ourselves.
+        /// </summary>
+        private static System.Collections.Generic.List<string[]> ParseValuesArray(string json)
+        {
+            var result = new System.Collections.Generic.List<string[]>();
+
+            int valuesIndex = json.IndexOf("\"values\"", StringComparison.Ordinal);
+            if (valuesIndex < 0)
+                return result;
+
+            int outerArrayStart = json.IndexOf('[', valuesIndex);
+            if (outerArrayStart < 0)
+                return result;
+
+            int pos = outerArrayStart + 1;
+            int depth = 1;
+
+            while (pos < json.Length && depth > 0)
+            {
+                char c = json[pos];
+
+                if (c == '[')
+                {
+                    if (depth == 1)
+                    {
+                        var row = ParseStringArray(json, pos, out int endPos);
+                        result.Add(row);
+                        pos = endPos;
+                        continue;
+                    }
+                    depth++;
+                }
+                else if (c == ']')
+                {
+                    depth--;
+                }
+
+                pos++;
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Parses a single JSON string array starting at the '[' character.
+        /// Returns the array and sets endPos to the position after ']'.
+        /// </summary>
+        private static string[] ParseStringArray(string json, int startPos, out int endPos)
+        {
+            var items = new System.Collections.Generic.List<string>();
+            int pos = startPos + 1;
+
+            while (pos < json.Length)
+            {
+                char c = json[pos];
+
+                if (c == ']')
+                {
+                    endPos = pos + 1;
+                    return items.ToArray();
+                }
+
+                if (c == '"')
+                {
+                    var value = ParseJsonString(json, pos, out int strEnd);
+                    items.Add(value);
+                    pos = strEnd;
+                    continue;
+                }
+
+                pos++;
+            }
+
+            endPos = pos;
+            return items.ToArray();
+        }
+
+        /// <summary>
+        /// Parses a JSON quoted string starting at the opening '"'.
+        /// Handles escape sequences.
+        /// </summary>
+        private static string ParseJsonString(string json, int startPos, out int endPos)
+        {
+            var sb = new System.Text.StringBuilder();
+            int pos = startPos + 1;
+
+            while (pos < json.Length)
+            {
+                char c = json[pos];
+
+                if (c == '\\' && pos + 1 < json.Length)
+                {
+                    char next = json[pos + 1];
+                    switch (next)
+                    {
+                        case '"':
+                            sb.Append('"');
+                            break;
+                        case '\\':
+                            sb.Append('\\');
+                            break;
+                        case 'n':
+                            sb.Append('\n');
+                            break;
+                        case 'r':
+                            sb.Append('\r');
+                            break;
+                        case 't':
+                            sb.Append('\t');
+                            break;
+                        default:
+                            sb.Append(next);
+                            break;
+                    }
+                    pos += 2;
+                    continue;
+                }
+
+                if (c == '"')
+                {
+                    endPos = pos + 1;
+                    return sb.ToString();
+                }
+
+                sb.Append(c);
+                pos++;
+            }
+
+            endPos = pos;
+            return sb.ToString();
+        }
+
         private static string[] GenerateDefaultHeaders(int count)
         {
             var headers = new string[count];
@@ -123,12 +259,5 @@ namespace DataGraph.GoogleSheets.Fetch
             return headers;
         }
 
-        [Serializable]
-        private class SheetsValuesResponse
-        {
-            public string range;
-            public string majorDimension;
-            public string[][] values;
-        }
     }
 }

@@ -9,7 +9,7 @@ namespace DataGraph.Editor.Nodes
     /// Registered with the .datagraph file extension.
     /// OnGraphChanged triggers real-time validation via GraphLogger.
     /// </summary>
-    [Graph(".datagraph")]
+    [Graph("datagraph")]
     [Serializable]
     internal class DataGraphAsset : Graph
     {

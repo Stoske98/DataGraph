@@ -1,5 +1,7 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Reflection;
 using Unity.GraphToolkit.Editor;
 using DataGraph.Editor.Domain;
 using DataGraph.Editor.Nodes;
@@ -9,13 +11,14 @@ namespace DataGraph.Editor.Adapter
 {
     /// <summary>
     /// Reads a GTK Graph (DataGraphAsset) and produces a ParseableGraph
-    /// domain model. This is the boundary between GTK presentation layer
-    /// and the domain layer.
+    /// domain model. Uses reflection to traverse GTK internal wire models
+    /// since the public port API does not resolve connections when graphs
+    /// are loaded programmatically.
     /// </summary>
     internal sealed class GraphModelAdapter
     {
         /// <summary>
-        /// Converts a DataGraphAsset into a ParseableGraph.
+        /// Converts a DataGraphAsset into an immutable ParseableGraph.
         /// </summary>
         public Result<ParseableGraph> ReadGraph(DataGraphAsset graphAsset)
         {
@@ -28,7 +31,7 @@ namespace DataGraph.Editor.Adapter
                 if (rootNode == null)
                     return Result<ParseableGraph>.Failure("Graph must have exactly one Root node.");
 
-                var childMap = BuildChildMap(graphAsset);
+                var childMap = BuildChildMapViaReflection(graphAsset);
                 var parseableRoot = ConvertNode(rootNode, childMap);
 
                 var allNodes = new List<ParseableNode>();
@@ -54,10 +57,10 @@ namespace DataGraph.Editor.Adapter
             Node root = null;
             for (int i = 0; i < graphAsset.nodeCount; i++)
             {
-                var inode = graphAsset.GetNode(i);
-                if (inode is not Node node) continue;
-                if (!IsRootNode(node)) continue;
-
+                if (graphAsset.GetNode(i) is not Node node)
+                    continue;
+                if (!IsRootNode(node))
+                    continue;
                 if (root != null)
                     return null;
                 root = node;
@@ -73,107 +76,208 @@ namespace DataGraph.Editor.Adapter
         }
 
         /// <summary>
-        /// Builds a map from each parent node to its connected child nodes
-        /// by traversing Children output port connections.
+        /// Builds parent-to-children map by traversing GTK wire models via reflection.
+        /// Path: Graph.m_Implementation -> GraphModel.NodeModels + GraphModel.WireModels.
+        /// Each WireModel has FromPort.NodeModel and ToPort.NodeModel which map to
+        /// User Nodes through IUserNodeModelImp.Node.
         /// </summary>
-        private Dictionary<Node, List<Node>> BuildChildMap(DataGraphAsset graphAsset)
+        private Dictionary<Node, List<Node>> BuildChildMapViaReflection(DataGraphAsset graphAsset)
         {
             var map = new Dictionary<Node, List<Node>>();
-            var connectedPorts = new List<IPort>();
 
-            for (int i = 0; i < graphAsset.nodeCount; i++)
+            var implField = typeof(Graph).GetField("m_Implementation",
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            var impl = implField?.GetValue(graphAsset);
+            if (impl == null)
+                return map;
+
+            var nodeModelToUserNode = new Dictionary<object, Node>();
+            var nodeModelsProp = impl.GetType().GetProperty("NodeModels",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+
+            if (nodeModelsProp != null)
             {
-                var inode = graphAsset.GetNode(i);
-                if (inode is not Node node) continue;
-
-                var outputPort = node.GetOutputPortByName("Children");
-                if (outputPort == null) continue;
-
-                connectedPorts.Clear();
-                outputPort.GetConnectedPorts(connectedPorts);
-
-                var children = new List<Node>();
-                foreach (var connectedPort in connectedPorts)
+                var nodeModels = nodeModelsProp.GetValue(impl) as IList;
+                if (nodeModels != null)
                 {
-                    var childNode = FindNodeOwningPort(connectedPort, graphAsset);
-                    if (childNode != null)
-                        children.Add(childNode);
+                    foreach (var nm in nodeModels)
+                    {
+                        if (nm == null)
+                            continue;
+                        var userNode = GetUserNodeFromNodeModel(nm);
+                        if (userNode != null)
+                            nodeModelToUserNode[nm] = userNode;
+                    }
+                }
+            }
+
+            var wireModelsProp = impl.GetType().GetProperty("WireModels",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            var wireModels = wireModelsProp?.GetValue(impl) as IList;
+
+            if (wireModels == null || wireModels.Count == 0)
+                return map;
+
+            var guidToUserNode = new Dictionary<string, Node>();
+            foreach (var kvp in nodeModelToUserNode)
+            {
+                var guid = GetGuidString(kvp.Key);
+                if (!string.IsNullOrEmpty(guid))
+                    guidToUserNode[guid] = kvp.Value;
+            }
+
+            foreach (var wire in wireModels)
+            {
+                if (wire == null)
+                    continue;
+
+                var fromGuid = GetWireNodeGuid(wire, "FromNodeGuid");
+                var toGuid = GetWireNodeGuid(wire, "ToNodeGuid");
+
+                if (string.IsNullOrEmpty(fromGuid) || string.IsNullOrEmpty(toGuid))
+                    continue;
+
+                if (!guidToUserNode.TryGetValue(fromGuid, out var parentNode))
+                    continue;
+                if (!guidToUserNode.TryGetValue(toGuid, out var childNode))
+                    continue;
+
+                if (!map.TryGetValue(parentNode, out var children))
+                {
+                    children = new List<Node>();
+                    map[parentNode] = children;
                 }
 
-                map[node] = children;
+                if (!children.Contains(childNode))
+                    children.Add(childNode);
             }
 
             return map;
         }
 
         /// <summary>
-        /// Finds the Node that owns a given port by checking all nodes'
-        /// input ports for reference equality.
+        /// Extracts the User Node from an internal NodeModel via IUserNodeModelImp.Node property.
         /// </summary>
-        private static Node FindNodeOwningPort(IPort port, DataGraphAsset graphAsset)
+        private static Node GetUserNodeFromNodeModel(object nodeModel)
         {
-            for (int i = 0; i < graphAsset.nodeCount; i++)
-            {
-                var inode = graphAsset.GetNode(i);
-                if (inode is not Node node) continue;
+            var nodeProp = nodeModel.GetType().GetProperty("Node",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            if (nodeProp == null)
+                return null;
+            return nodeProp.GetValue(nodeModel) as Node;
+        }
 
-                var parentPort = node.GetInputPortByName("Parent");
-                if (parentPort != null && ReferenceEquals(parentPort, port))
-                    return node;
+        /// <summary>
+        /// Gets a GUID string from a wire's node reference property (FromNodeGuid or ToNodeGuid).
+        /// </summary>
+        private static string GetWireNodeGuid(object wire, string propertyName)
+        {
+            var prop = wire.GetType().GetProperty(propertyName,
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            if (prop == null)
+            {
+                var field = wire.GetType().GetField(propertyName,
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                return field?.GetValue(wire)?.ToString();
             }
-            return null;
+            return prop.GetValue(wire)?.ToString();
+        }
+
+        /// <summary>
+        /// Gets the GUID string from a NodeModel's Guid property.
+        /// </summary>
+        private static string GetGuidString(object nodeModel)
+        {
+            var guidProp = nodeModel.GetType().GetProperty("Guid",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            return guidProp?.GetValue(nodeModel)?.ToString();
         }
 
         private ParseableNode ConvertNode(Node node, Dictionary<Node, List<Node>> childMap)
         {
+            node.DefineNode();
             var children = ConvertChildren(node, childMap);
 
             return node switch
             {
-                DictionaryRootNode dict => new ParseableDictionaryRoot(
-                    dict.TypeName, dict.KeyColumn, dict.KeyType, children),
-
-                ArrayRootNode arr => new ParseableArrayRoot(
-                    arr.TypeName, children),
-
-                ObjectRootNode obj => new ParseableObjectRoot(
-                    obj.TypeName, children),
-
-                ObjectFieldNode objField => new ParseableObjectField(
-                    objField.FieldName, objField.TypeName, children),
-
-                ArrayFieldNode arrField => new ParseableArrayField(
-                    arrField.FieldName,
-                    arrField.TypeName,
-                    arrField.ArrayMode,
-                    arrField.ArrayMode == ArrayMode.Vertical ? arrField.IndexColumn : null,
-                    arrField.ArrayMode == ArrayMode.Horizontal ? arrField.Separator : null,
+                DictionaryRootNode => new ParseableDictionaryRoot(
+                    GetOption<string>(node, "TypeName"),
+                    GetOption<string>(node, "KeyColumn"),
+                    GetOption<KeyType>(node, "KeyType"),
                     children),
 
-                DictionaryFieldNode dictField => new ParseableDictionaryField(
-                    dictField.FieldName,
-                    dictField.TypeName,
-                    dictField.KeyColumn,
-                    dictField.KeyType,
+                ArrayRootNode => new ParseableArrayRoot(
+                    GetOption<string>(node, "TypeName"),
                     children),
 
-                CustomFieldNode custom => new ParseableCustomField(
-                    custom.FieldName,
-                    custom.Column,
-                    custom.ValueType,
-                    custom.Separator,
-                    custom.Format,
-                    custom.ResolveEnumType()),
+                ObjectRootNode => new ParseableObjectRoot(
+                    GetOption<string>(node, "TypeName"),
+                    children),
 
-                AssetFieldNode asset => new ParseableAssetField(
-                    asset.FieldName,
-                    asset.Column,
-                    asset.AssetTypeName,
-                    asset.LoadMethod),
+                ObjectFieldNode => new ParseableObjectField(
+                    GetOption<string>(node, "FieldName"),
+                    GetOption<string>(node, "TypeName"),
+                    children),
+
+                ArrayFieldNode => CreateArrayField(node, children),
+
+                DictionaryFieldNode => new ParseableDictionaryField(
+                    GetOption<string>(node, "FieldName"),
+                    GetOption<string>(node, "TypeName"),
+                    GetOption<string>(node, "KeyColumn"),
+                    GetOption<KeyType>(node, "KeyType"),
+                    children),
+
+                CustomFieldNode => CreateCustomField(node),
+
+                AssetFieldNode => new ParseableAssetField(
+                    GetOption<string>(node, "FieldName"),
+                    GetOption<string>(node, "Column"),
+                    GetOption<string>(node, "AssetType"),
+                    GetOption<AssetLoadMethod>(node, "LoadMethod")),
 
                 _ => throw new InvalidOperationException(
                     $"Unknown node type: {node.GetType().Name}")
             };
+        }
+
+        private ParseableArrayField CreateArrayField(Node node, ParseableNode[] children)
+        {
+            var mode = GetOption<ArrayMode>(node, "ArrayMode");
+            return new ParseableArrayField(
+                GetOption<string>(node, "FieldName"),
+                GetOption<string>(node, "TypeName"),
+                mode,
+                mode == ArrayMode.Vertical ? GetOption<string>(node, "IndexColumn") : null,
+                mode == ArrayMode.Horizontal ? GetOption<string>(node, "Separator") : null,
+                children);
+        }
+
+        private ParseableCustomField CreateCustomField(Node node)
+        {
+            var enumTypeName = GetOption<string>(node, "EnumType");
+            Type enumType = null;
+            if (!string.IsNullOrEmpty(enumTypeName))
+                enumType = Type.GetType(enumTypeName);
+
+            return new ParseableCustomField(
+                GetOption<string>(node, "FieldName"),
+                GetOption<string>(node, "Column"),
+                GetOption<FieldValueType>(node, "ValueType"),
+                GetOption<string>(node, "Separator"),
+                GetOption<string>(node, "Format"),
+                enumType);
+        }
+
+        /// <summary>
+        /// Reads a GTK node option value by name. Returns default(T) if not found.
+        /// </summary>
+        private static T GetOption<T>(Node node, string optionName)
+        {
+            var option = node.GetNodeOptionByName(optionName);
+            if (option != null && option.TryGetValue<T>(out var value))
+                return value;
+            return default;
         }
 
         private ParseableNode[] ConvertChildren(Node parent, Dictionary<Node, List<Node>> childMap)
@@ -183,9 +287,7 @@ namespace DataGraph.Editor.Adapter
 
             var result = new ParseableNode[gtkChildren.Count];
             for (int i = 0; i < gtkChildren.Count; i++)
-            {
                 result[i] = ConvertNode(gtkChildren[i], childMap);
-            }
             return result;
         }
 
@@ -193,9 +295,7 @@ namespace DataGraph.Editor.Adapter
         {
             result.Add(node);
             foreach (var child in node.Children)
-            {
                 CollectNodes(child, result);
-            }
         }
     }
 }
