@@ -54,12 +54,14 @@ namespace DataGraph.Editor.Adapter
             for (int i = 0; i < graph.nodeCount; i++)
             {
                 var inode = graph.GetNode(i);
-                if (inode is not Node node) continue;
+                if (inode is not Node node)
+                    continue;
                 if (node is DictionaryRootNode or ArrayRootNode or ObjectRootNode)
                     continue;
 
                 var parentPort = node.GetInputPortByName("Parent");
-                if (parentPort == null) continue;
+                if (parentPort == null)
+                    continue;
 
                 connectedPorts.Clear();
                 parentPort.GetConnectedPorts(connectedPorts);
@@ -77,7 +79,12 @@ namespace DataGraph.Editor.Adapter
         {
             return node switch
             {
-                CustomFieldNode cf => cf.FieldName,
+                StringFieldNode sf => sf.FieldName,
+                NumberFieldNode nf => nf.FieldName,
+                BoolFieldNode bf => bf.FieldName,
+                Vector2FieldNode v2f => v2f.FieldName,
+                Vector3FieldNode v3f => v3f.FieldName,
+                ColorFieldNode clf => clf.FieldName,
                 AssetFieldNode af => af.FieldName,
                 ObjectFieldNode of => of.FieldName,
                 ArrayFieldNode arf => arf.FieldName,

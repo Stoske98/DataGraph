@@ -2,7 +2,9 @@
     "name": "DataGraph.Editor.Public",
     "rootNamespace": "DataGraph.Editor.Public",
     "references": [
-        "DataGraph.Runtime"
+        "DataGraph.Runtime",
+        "Unity.GraphToolkit.Editor",
+        "Unity.GraphToolkit.Common.Editor"
     ],
     "includePlatforms": [
         "Editor"

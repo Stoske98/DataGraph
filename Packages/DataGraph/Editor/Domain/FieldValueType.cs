@@ -9,6 +9,7 @@ namespace DataGraph.Editor.Domain
         String,
         Int,
         Float,
+        Double,
         Bool,
         Vector2,
         Vector3,

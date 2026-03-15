@@ -5,6 +5,7 @@ using System.Reflection;
 using Unity.GraphToolkit.Editor;
 using DataGraph.Editor.Domain;
 using DataGraph.Editor.Nodes;
+using DataGraph.Editor.Public;
 using DataGraph.Runtime;
 
 namespace DataGraph.Editor.Adapter
@@ -218,13 +219,47 @@ namespace DataGraph.Editor.Adapter
                     GetOption<KeyType>(node, "KeyType"),
                     children),
 
-                CustomFieldNode => CreateCustomField(node),
+                StringFieldNode => new ParseableCustomField(
+                    GetOption<string>(node, "FieldName"),
+                    GetColumnOption(node, "Column"),
+                    FieldValueType.String, null, null, null),
+
+                NumberFieldNode => CreateNumberField(node),
+
+                BoolFieldNode => new ParseableCustomField(
+                    GetOption<string>(node, "FieldName"),
+                    GetColumnOption(node, "Column"),
+                    FieldValueType.Bool, null, null, null),
+
+                Vector2FieldNode => new ParseableCustomField(
+                    GetOption<string>(node, "FieldName"),
+                    GetColumnOption(node, "Column"),
+                    FieldValueType.Vector2,
+                    GetOption<string>(node, "Separator"), null, null),
+
+                Vector3FieldNode => new ParseableCustomField(
+                    GetOption<string>(node, "FieldName"),
+                    GetColumnOption(node, "Column"),
+                    FieldValueType.Vector3,
+                    GetOption<string>(node, "Separator"), null, null),
+
+                ColorFieldNode => new ParseableCustomField(
+                    GetOption<string>(node, "FieldName"),
+                    GetColumnOption(node, "Column"),
+                    FieldValueType.Color, null,
+                    GetOption<string>(node, "Format"), null),
 
                 AssetFieldNode => new ParseableAssetField(
                     GetOption<string>(node, "FieldName"),
                     GetColumnOption(node, "Column"),
                     GetOption<string>(node, "AssetType"),
                     GetOption<AssetLoadMethod>(node, "LoadMethod")),
+
+                CustomFieldNodeBase custom => new ParseableCustomField(
+                    custom.GetFieldName(),
+                    custom.GetColumn(),
+                    FieldValueType.String,
+                    null, null, null),
 
                 _ => throw new InvalidOperationException(
                     $"Unknown node type: {node.GetType().Name}")
@@ -243,7 +278,23 @@ namespace DataGraph.Editor.Adapter
                 children);
         }
 
-        private ParseableCustomField CreateCustomField(Node node)
+        private ParseableCustomField CreateNumberField(Node node)
+        {
+            var numberType = GetOption<NumberType>(node, "NumberType");
+            var fieldValueType = numberType switch
+            {
+                NumberType.Float => FieldValueType.Float,
+                NumberType.Double => FieldValueType.Double,
+                _ => FieldValueType.Int
+            };
+
+            return new ParseableCustomField(
+                GetOption<string>(node, "FieldName"),
+                GetColumnOption(node, "Column"),
+                fieldValueType, null, null, null);
+        }
+
+        private ParseableCustomField CreateEnumField(Node node)
         {
             var enumTypeName = GetOption<string>(node, "EnumType");
             Type enumType = null;
@@ -253,10 +304,8 @@ namespace DataGraph.Editor.Adapter
             return new ParseableCustomField(
                 GetOption<string>(node, "FieldName"),
                 GetColumnOption(node, "Column"),
-                GetOption<FieldValueType>(node, "ValueType"),
-                GetOption<string>(node, "Separator"),
-                GetOption<string>(node, "Format"),
-                enumType);
+                FieldValueType.Enum,
+                null, null, enumType);
         }
 
         /// <summary>
