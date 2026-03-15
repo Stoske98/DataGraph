@@ -216,7 +216,7 @@ namespace DataGraph.Editor.UI
                 }
 
                 var sheetRef = new SheetReference(
-                    _targetGraph.SheetId, _targetGraph.HeaderRowOffset);
+                    _targetGraph.SheetId, _targetGraph.HeaderRowOffset, _targetGraph.SheetName);
 
                 var result = await provider.FetchAsync(sheetRef, _fetchCts.Token);
                 if (result.IsFailure)
@@ -250,7 +250,8 @@ namespace DataGraph.Editor.UI
             if (_targetGraph == null || _cachedData == null) return;
 
             var command = new ParseGraphCommand();
-            var parseResult = command.ParseFromCache(_targetGraph, _cachedData);
+            int maxEntries = _fullPreview ? 0 : 1;
+            var parseResult = command.ParseFromCache(_targetGraph, _cachedData, maxEntries);
 
             if (parseResult.IsFailure)
             {

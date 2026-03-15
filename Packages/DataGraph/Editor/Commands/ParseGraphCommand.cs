@@ -68,7 +68,8 @@ namespace DataGraph.Editor.Commands
 
                 // 2. Fetch
                 log.LogInfo($"Fetch: requesting data from sheet...");
-                var sheetRef = new SheetReference(graph.SheetId, graph.HeaderRowOffset);
+                var sheetRef = new SheetReference(
+                    graph.SheetId, graph.HeaderRowOffset, graph.SheetName);
                 var fetchResult = await provider.FetchAsync(sheetRef, cancellationToken);
                 if (fetchResult.IsFailure)
                 {
@@ -198,16 +199,18 @@ namespace DataGraph.Editor.Commands
 
         /// <summary>
         /// Runs only Adapt + Parse using cached data. For JSON Preview.
+        /// Pass maxEntries=1 for first-element preview, 0 for full.
         /// </summary>
         public Result<ParsedDataTree> ParseFromCache(
             DataGraphAsset graphAsset,
-            RawTableData cachedData)
+            RawTableData cachedData,
+            int maxEntries = 0)
         {
             var adaptResult = _adapter.ReadGraph(graphAsset);
             if (adaptResult.IsFailure)
                 return Result<ParsedDataTree>.Failure(adaptResult.Error);
 
-            return _parserEngine.Parse(cachedData, adaptResult.Value);
+            return _parserEngine.Parse(cachedData, adaptResult.Value, maxEntries);
         }
 
         private static void EnsureDirectory(string filePath)

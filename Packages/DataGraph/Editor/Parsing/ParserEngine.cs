@@ -15,7 +15,7 @@ namespace DataGraph.Editor.Parsing
         /// <summary>
         /// Parses the given table data according to the graph definition.
         /// </summary>
-        public Result<ParsedDataTree> Parse(RawTableData data, ParseableGraph graph)
+        public Result<ParsedDataTree> Parse(RawTableData data, ParseableGraph graph, int maxEntries = 0)
         {
             if (data == null)
                 return Result<ParsedDataTree>.Failure("Table data is null.");
@@ -30,8 +30,8 @@ namespace DataGraph.Editor.Parsing
             {
                 root = graph.Root switch
                 {
-                    ParseableDictionaryRoot dictRoot => ParseDictionaryRoot(dictRoot, nodeParser, context),
-                    ParseableArrayRoot arrayRoot => ParseArrayRoot(arrayRoot, nodeParser, context),
+                    ParseableDictionaryRoot dictRoot => ParseDictionaryRoot(dictRoot, nodeParser, context, maxEntries),
+                    ParseableArrayRoot arrayRoot => ParseArrayRoot(arrayRoot, nodeParser, context, maxEntries),
                     ParseableObjectRoot objRoot => ParseObjectRoot(objRoot, nodeParser, context),
                     _ => throw new InvalidOperationException(
                         $"Unknown root node type: {graph.Root.GetType().Name}")
@@ -49,13 +49,17 @@ namespace DataGraph.Editor.Parsing
         private ParsedNode ParseDictionaryRoot(
             ParseableDictionaryRoot root,
             NodeParser nodeParser,
-            ParseContext context)
+            ParseContext context,
+            int maxEntries)
         {
             var entries = new Dictionary<object, ParsedNode>();
             int currentRow = 0;
 
             while (currentRow < context.TableData.RowCount)
             {
+                if (maxEntries > 0 && entries.Count >= maxEntries)
+                    break;
+
                 var keyRaw = context.TableData.GetCell(currentRow, root.KeyColumn);
 
                 if (string.IsNullOrEmpty(keyRaw))
@@ -105,13 +109,17 @@ namespace DataGraph.Editor.Parsing
         private ParsedNode ParseArrayRoot(
             ParseableArrayRoot root,
             NodeParser nodeParser,
-            ParseContext context)
+            ParseContext context,
+            int maxEntries)
         {
             var elements = new List<ParsedNode>();
             int currentRow = 0;
 
             while (currentRow < context.TableData.RowCount)
             {
+                if (maxEntries > 0 && elements.Count >= maxEntries)
+                    break;
+
                 var result = nodeParser.ParseObjectChildren(
                     root.TypeName, null, root.Children, currentRow, context.TableData.RowCount);
                 elements.Add(result.Node);

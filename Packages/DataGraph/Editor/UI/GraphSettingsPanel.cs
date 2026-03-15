@@ -14,6 +14,7 @@ namespace DataGraph.Editor.UI
         private string _graphPath = "";
         private DataGraphAsset _graph;
         private string _sheetId = "";
+        private string _sheetName = "Sheet1";
         private int _headerRowOffset = 1;
         private string _graphName = "";
         private string _statusMessage = "";
@@ -53,6 +54,7 @@ namespace DataGraph.Editor.UI
 
             _graphName = EditorGUILayout.TextField("Graph Name", _graphName);
             _sheetId = EditorGUILayout.TextField("Sheet ID / URL", _sheetId);
+            _sheetName = EditorGUILayout.TextField("Sheet Tab Name", _sheetName);
             _headerRowOffset = EditorGUILayout.IntField("Header Row Offset", _headerRowOffset);
 
             EditorGUILayout.Space(8);
@@ -83,6 +85,7 @@ namespace DataGraph.Editor.UI
                 if (_graph != null)
                 {
                     _sheetId = _graph.SheetId ?? "";
+                    _sheetName = _graph.SheetName ?? "Sheet1";
                     _headerRowOffset = _graph.HeaderRowOffset;
                     _graphName = _graph.GraphName ?? "";
                 }
@@ -100,6 +103,7 @@ namespace DataGraph.Editor.UI
 
             _graph.GraphName = _graphName;
             _graph.SheetId = _sheetId;
+            _graph.SheetName = _sheetName;
             _graph.HeaderRowOffset = _headerRowOffset;
             GraphDatabase.SaveGraphIfDirty(_graph);
             _statusMessage = "Saved.";

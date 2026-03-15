@@ -42,7 +42,8 @@ namespace DataGraph.Editor.Adapter
                     allNodes,
                     graphAsset.SheetId,
                     graphAsset.HeaderRowOffset,
-                    graphAsset.GraphName);
+                    graphAsset.GraphName,
+                    graphAsset.SheetName);
 
                 return Result<ParseableGraph>.Success(graph);
             }
@@ -57,12 +58,9 @@ namespace DataGraph.Editor.Adapter
             Node root = null;
             for (int i = 0; i < graphAsset.nodeCount; i++)
             {
-                if (graphAsset.GetNode(i) is not Node node)
-                    continue;
-                if (!IsRootNode(node))
-                    continue;
-                if (root != null)
-                    return null;
+                if (graphAsset.GetNode(i) is not Node node) continue;
+                if (!IsRootNode(node)) continue;
+                if (root != null) return null;
                 root = node;
             }
             return root;
@@ -88,8 +86,7 @@ namespace DataGraph.Editor.Adapter
             var implField = typeof(Graph).GetField("m_Implementation",
                 BindingFlags.NonPublic | BindingFlags.Instance);
             var impl = implField?.GetValue(graphAsset);
-            if (impl == null)
-                return map;
+            if (impl == null) return map;
 
             var nodeModelToUserNode = new Dictionary<object, Node>();
             var nodeModelsProp = impl.GetType().GetProperty("NodeModels",
@@ -102,8 +99,7 @@ namespace DataGraph.Editor.Adapter
                 {
                     foreach (var nm in nodeModels)
                     {
-                        if (nm == null)
-                            continue;
+                        if (nm == null) continue;
                         var userNode = GetUserNodeFromNodeModel(nm);
                         if (userNode != null)
                             nodeModelToUserNode[nm] = userNode;
@@ -115,8 +111,7 @@ namespace DataGraph.Editor.Adapter
                 BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
             var wireModels = wireModelsProp?.GetValue(impl) as IList;
 
-            if (wireModels == null || wireModels.Count == 0)
-                return map;
+            if (wireModels == null || wireModels.Count == 0) return map;
 
             var guidToUserNode = new Dictionary<string, Node>();
             foreach (var kvp in nodeModelToUserNode)
@@ -128,19 +123,15 @@ namespace DataGraph.Editor.Adapter
 
             foreach (var wire in wireModels)
             {
-                if (wire == null)
-                    continue;
+                if (wire == null) continue;
 
                 var fromGuid = GetWireNodeGuid(wire, "FromNodeGuid");
                 var toGuid = GetWireNodeGuid(wire, "ToNodeGuid");
 
-                if (string.IsNullOrEmpty(fromGuid) || string.IsNullOrEmpty(toGuid))
-                    continue;
+                if (string.IsNullOrEmpty(fromGuid) || string.IsNullOrEmpty(toGuid)) continue;
 
-                if (!guidToUserNode.TryGetValue(fromGuid, out var parentNode))
-                    continue;
-                if (!guidToUserNode.TryGetValue(toGuid, out var childNode))
-                    continue;
+                if (!guidToUserNode.TryGetValue(fromGuid, out var parentNode)) continue;
+                if (!guidToUserNode.TryGetValue(toGuid, out var childNode)) continue;
 
                 if (!map.TryGetValue(parentNode, out var children))
                 {
@@ -162,8 +153,7 @@ namespace DataGraph.Editor.Adapter
         {
             var nodeProp = nodeModel.GetType().GetProperty("Node",
                 BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-            if (nodeProp == null)
-                return null;
+            if (nodeProp == null) return null;
             return nodeProp.GetValue(nodeModel) as Node;
         }
 
@@ -202,7 +192,7 @@ namespace DataGraph.Editor.Adapter
             {
                 DictionaryRootNode => new ParseableDictionaryRoot(
                     GetOption<string>(node, "TypeName"),
-                    GetOption<string>(node, "KeyColumn"),
+                    GetColumnOption(node, "KeyColumn"),
                     GetOption<KeyType>(node, "KeyType"),
                     children),
 
@@ -224,7 +214,7 @@ namespace DataGraph.Editor.Adapter
                 DictionaryFieldNode => new ParseableDictionaryField(
                     GetOption<string>(node, "FieldName"),
                     GetOption<string>(node, "TypeName"),
-                    GetOption<string>(node, "KeyColumn"),
+                    GetColumnOption(node, "KeyColumn"),
                     GetOption<KeyType>(node, "KeyType"),
                     children),
 
@@ -232,7 +222,7 @@ namespace DataGraph.Editor.Adapter
 
                 AssetFieldNode => new ParseableAssetField(
                     GetOption<string>(node, "FieldName"),
-                    GetOption<string>(node, "Column"),
+                    GetColumnOption(node, "Column"),
                     GetOption<string>(node, "AssetType"),
                     GetOption<AssetLoadMethod>(node, "LoadMethod")),
 
@@ -248,7 +238,7 @@ namespace DataGraph.Editor.Adapter
                 GetOption<string>(node, "FieldName"),
                 GetOption<string>(node, "TypeName"),
                 mode,
-                mode == ArrayMode.Vertical ? GetOption<string>(node, "IndexColumn") : null,
+                mode == ArrayMode.Vertical ? GetColumnOption(node, "IndexColumn") : null,
                 mode == ArrayMode.Horizontal ? GetOption<string>(node, "Separator") : null,
                 children);
         }
@@ -262,7 +252,7 @@ namespace DataGraph.Editor.Adapter
 
             return new ParseableCustomField(
                 GetOption<string>(node, "FieldName"),
-                GetOption<string>(node, "Column"),
+                GetColumnOption(node, "Column"),
                 GetOption<FieldValueType>(node, "ValueType"),
                 GetOption<string>(node, "Separator"),
                 GetOption<string>(node, "Format"),
@@ -278,6 +268,17 @@ namespace DataGraph.Editor.Adapter
             if (option != null && option.TryGetValue<T>(out var value))
                 return value;
             return default;
+        }
+
+        /// <summary>
+        /// Reads a column option as string. Returns "A" if not found.
+        /// </summary>
+        private static string GetColumnOption(Node node, string optionName)
+        {
+            var option = node.GetNodeOptionByName(optionName);
+            if (option != null && option.TryGetValue<string>(out var col) && !string.IsNullOrEmpty(col))
+                return col;
+            return "A";
         }
 
         private ParseableNode[] ConvertChildren(Node parent, Dictionary<Node, List<Node>> childMap)

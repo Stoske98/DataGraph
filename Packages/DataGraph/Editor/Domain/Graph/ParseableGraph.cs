@@ -16,13 +16,15 @@ namespace DataGraph.Editor.Domain
             IReadOnlyList<ParseableNode> allNodes,
             string sheetId,
             int headerRowOffset,
-            string graphName)
+            string graphName,
+            string sheetName = "Sheet1")
         {
             Root = root ?? throw new ArgumentNullException(nameof(root));
             AllNodes = allNodes ?? throw new ArgumentNullException(nameof(allNodes));
             SheetId = sheetId;
             HeaderRowOffset = headerRowOffset;
             GraphName = graphName;
+            SheetName = sheetName;
         }
 
         /// <summary>
@@ -49,5 +51,10 @@ namespace DataGraph.Editor.Domain
         /// Name of this graph, used for file naming in code generation.
         /// </summary>
         public string GraphName { get; }
+
+        /// <summary>
+        /// Sheet tab name used as range when fetching data.
+        /// </summary>
+        public string SheetName { get; }
     }
 }
