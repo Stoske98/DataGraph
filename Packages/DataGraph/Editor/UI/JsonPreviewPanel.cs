@@ -1,4 +1,6 @@
 using System;
+using System.Linq;
+using System.Reflection;
 using System.Threading;
 using DataGraph.Editor.Commands;
 using DataGraph.Editor.Nodes;
@@ -13,6 +15,7 @@ namespace DataGraph.Editor.UI
 {
     /// <summary>
     /// Editor window showing live JSON preview of parsed data.
+    /// Automatically detects the active graph from the GTK editor.
     /// Fetches once and caches. Re-parses from cache on graph changes
     /// with debounce. Explicit Refresh triggers new fetch.
     /// </summary>
@@ -28,6 +31,7 @@ namespace DataGraph.Editor.UI
         private Vector2 _scrollPosition;
         private double _lastChangeTime;
         private bool _pendingReparse;
+        private double _lastGraphCheck;
         private CancellationTokenSource _fetchCts;
         private string _cacheTimestamp = "";
 
@@ -83,11 +87,72 @@ namespace DataGraph.Editor.UI
 
         private void OnEditorUpdate()
         {
-            if (!_pendingReparse) return;
-            if (EditorApplication.timeSinceStartup - _lastChangeTime < DebounceDelay) return;
+            if (_pendingReparse)
+            {
+                if (EditorApplication.timeSinceStartup - _lastChangeTime >= DebounceDelay)
+                {
+                    _pendingReparse = false;
+                    ReparseFromCache();
+                }
+            }
 
-            _pendingReparse = false;
-            ReparseFromCache();
+            if (EditorApplication.timeSinceStartup - _lastGraphCheck > 0.5)
+            {
+                _lastGraphCheck = EditorApplication.timeSinceStartup;
+                DetectActiveGraph();
+            }
+        }
+
+        /// <summary>
+        /// Finds the active DataGraphAsset from the focused GTK editor window.
+        /// Path: Window.GraphTool.ToolState.GraphModel.Graph
+        /// </summary>
+        private void DetectActiveGraph()
+        {
+            var focused = EditorWindow.focusedWindow;
+            var windows = Resources.FindObjectsOfTypeAll<EditorWindow>();
+
+            foreach (var window in windows)
+            {
+                var windowType = window.GetType();
+                if (!windowType.FullName.Contains("GraphViewEditorWindow")) continue;
+
+                if (focused != null && focused != window && windows.Length > 1
+                    && focused.GetType().FullName.Contains("GraphViewEditorWindow"))
+                    continue;
+
+                try
+                {
+                    var tool = windowType.GetProperty("GraphTool",
+                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)?.GetValue(window);
+                    if (tool == null) continue;
+
+                    var toolState = tool.GetType().GetProperty("ToolState",
+                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)?.GetValue(tool);
+                    if (toolState == null) continue;
+
+                    var graphModel = toolState.GetType().GetProperty("GraphModel",
+                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)?.GetValue(toolState);
+                    if (graphModel == null) continue;
+
+                    var graph = graphModel.GetType().GetProperty("Graph",
+                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)?.GetValue(graphModel);
+
+                    if (graph is DataGraphAsset dga && dga != _targetGraph)
+                    {
+                        _targetGraph = dga;
+                        _cachedData = null;
+                        _jsonPreview = "";
+                        _statusMessage = "";
+                        FetchAndParse();
+                    }
+                    return;
+                }
+                catch
+                {
+                    continue;
+                }
+            }
         }
 
         private void OnGUI()
@@ -117,18 +182,14 @@ namespace DataGraph.Editor.UI
             DrawStatusBar();
         }
 
-        private string _graphPath = "";
-
         private void DrawToolbar()
         {
             EditorGUILayout.BeginHorizontal(EditorStyles.toolbar);
 
-            EditorGUI.BeginChangeCheck();
-            _graphPath = EditorGUILayout.TextField(_graphPath, GUILayout.MinWidth(120));
-            if (EditorGUI.EndChangeCheck() && _graphPath.EndsWith(".datagraph"))
-            {
-                LoadGraphFromPath(_graphPath);
-            }
+            var graphLabel = _targetGraph != null
+                ? (!string.IsNullOrEmpty(_targetGraph.GraphName) ? _targetGraph.GraphName : "Unnamed")
+                : "No graph";
+            EditorGUILayout.LabelField(graphLabel, EditorStyles.miniLabel, GUILayout.MinWidth(80));
 
             GUILayout.FlexibleSpace();
 
