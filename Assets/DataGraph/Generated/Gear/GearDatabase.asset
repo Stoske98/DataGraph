@@ -1,0 +1,40 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ce29e6430b4904f43a609478b30b4b79, type: 3}
+  m_Name: GearDatabase
+  m_EditorClassIdentifier: Assembly-CSharp::DataGraph.Data.GearDatabase
+  _keys: 0100000002000000
+  _values:
+  - name: Sword
+    skills:
+    - skillId: 10
+      levels:
+      - req: 1
+        power: 100
+      - req: 5
+        power: 200
+      - req: 10
+        power: 350
+    - skillId: 11
+      levels:
+      - req: 1
+        power: 80
+      - req: 3
+        power: 150
+  - name: Shield
+    skills:
+    - skillId: 20
+      levels:
+      - req: 1
+        power: 50
+      - req: 4
+        power: 120

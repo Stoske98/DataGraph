@@ -30,6 +30,14 @@ namespace DataGraph.Runtime
         }
 
         /// <summary>
+        /// Registers a dictionary database with arbitrary key type.
+        /// </summary>
+        public static void Register<TKey, TValue>(DictionaryDatabase<TKey, TValue> db)
+        {
+            _databases[typeof(TValue)] = db ?? throw new ArgumentNullException(nameof(db));
+        }
+
+        /// <summary>
         /// Registers an array database for the given value type.
         /// </summary>
         public static void Register<TValue>(ArrayDatabase<TValue> db)

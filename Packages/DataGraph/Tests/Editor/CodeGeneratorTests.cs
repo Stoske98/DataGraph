@@ -12,11 +12,11 @@ namespace DataGraph.Tests.Editor
         [SetUp]
         public void SetUp()
         {
-            _gen = new CodeGenerator("SO");
+            _gen = new CodeGenerator();
         }
 
         [Test]
-        public void DictionaryRoot_GeneratesScriptableObject()
+        public void DictionaryRoot_GeneratesEntryWithDataGraphEntry()
         {
             var graph = MakeGraph(new ParseableDictionaryRoot("Item", "A", KeyType.Int, new ParseableNode[]
             {
@@ -24,41 +24,83 @@ namespace DataGraph.Tests.Editor
                 new ParseableCustomField("damage", "C", FieldValueType.Int),
             }));
 
-            var result = _gen.Generate(graph);
+            var result = _gen.GenerateEntries(graph);
 
             Assert.IsTrue(result.IsSuccess);
             var code = result.Value;
-            Assert.IsTrue(code.Contains("public class ItemSO : ScriptableObject"));
+            Assert.IsTrue(code.Contains("public class Item : DataGraphEntry"));
             Assert.IsTrue(code.Contains("public string name;"));
             Assert.IsTrue(code.Contains("public int damage;"));
         }
 
         [Test]
-        public void ArrayRoot_GeneratesScriptableObject()
+        public void DictionaryRoot_GeneratesDatabaseClass()
+        {
+            var graph = MakeGraph(new ParseableDictionaryRoot("Item", "A", KeyType.Int, new ParseableNode[]
+            {
+                new ParseableCustomField("name", "B", FieldValueType.String),
+            }));
+
+            var result = _gen.GenerateDatabase(graph);
+
+            Assert.IsTrue(result.IsSuccess);
+            Assert.IsTrue(result.Value.Contains("public class TestDatabase : DictionaryDatabaseAsset<int, Item>"));
+        }
+
+        [Test]
+        public void ArrayRoot_GeneratesEntryWithDataGraphEntry()
         {
             var graph = MakeGraph(new ParseableArrayRoot("Level", new ParseableNode[]
             {
                 new ParseableCustomField("difficulty", "A", FieldValueType.Int),
             }));
 
-            var result = _gen.Generate(graph);
+            var result = _gen.GenerateEntries(graph);
 
             Assert.IsTrue(result.IsSuccess);
-            Assert.IsTrue(result.Value.Contains("public class LevelSO : ScriptableObject"));
+            Assert.IsTrue(result.Value.Contains("public class Level : DataGraphEntry"));
         }
 
         [Test]
-        public void ObjectRoot_GeneratesScriptableObject()
+        public void ArrayRoot_GeneratesDatabaseClass()
+        {
+            var graph = MakeGraph(new ParseableArrayRoot("Level", new ParseableNode[]
+            {
+                new ParseableCustomField("difficulty", "A", FieldValueType.Int),
+            }));
+
+            var result = _gen.GenerateDatabase(graph);
+
+            Assert.IsTrue(result.IsSuccess);
+            Assert.IsTrue(result.Value.Contains("public class TestDatabase : ArrayDatabaseAsset<Level>"));
+        }
+
+        [Test]
+        public void ObjectRoot_GeneratesEntryWithDataGraphEntry()
         {
             var graph = MakeGraph(new ParseableObjectRoot("GameConfig", new ParseableNode[]
             {
                 new ParseableCustomField("maxPlayers", "A", FieldValueType.Int),
             }));
 
-            var result = _gen.Generate(graph);
+            var result = _gen.GenerateEntries(graph);
 
             Assert.IsTrue(result.IsSuccess);
-            Assert.IsTrue(result.Value.Contains("public class GameConfigSO : ScriptableObject"));
+            Assert.IsTrue(result.Value.Contains("public class GameConfig : DataGraphEntry"));
+        }
+
+        [Test]
+        public void ObjectRoot_GeneratesDatabaseClass()
+        {
+            var graph = MakeGraph(new ParseableObjectRoot("GameConfig", new ParseableNode[]
+            {
+                new ParseableCustomField("maxPlayers", "A", FieldValueType.Int),
+            }));
+
+            var result = _gen.GenerateDatabase(graph);
+
+            Assert.IsTrue(result.IsSuccess);
+            Assert.IsTrue(result.Value.Contains("public class TestDatabase : ObjectDatabaseAsset<GameConfig>"));
         }
 
         [Test]
@@ -73,13 +115,13 @@ namespace DataGraph.Tests.Editor
                 }),
             }));
 
-            var result = _gen.Generate(graph);
+            var result = _gen.GenerateEntries(graph);
 
             Assert.IsTrue(result.IsSuccess);
             var code = result.Value;
-            Assert.IsTrue(code.Contains("public ItemStatsSO stats;"));
+            Assert.IsTrue(code.Contains("public ItemStats stats;"));
             Assert.IsTrue(code.Contains("[Serializable]"));
-            Assert.IsTrue(code.Contains("public class ItemStatsSO"));
+            Assert.IsTrue(code.Contains("public class ItemStats"));
             Assert.IsTrue(code.Contains("public int hp;"));
             Assert.IsTrue(code.Contains("public float speed;"));
         }
@@ -96,13 +138,13 @@ namespace DataGraph.Tests.Editor
                 }),
             }));
 
-            var result = _gen.Generate(graph);
+            var result = _gen.GenerateEntries(graph);
 
             Assert.IsTrue(result.IsSuccess);
             var code = result.Value;
-            Assert.IsTrue(code.Contains("public List<RewardSO> rewards;"));
+            Assert.IsTrue(code.Contains("public List<Reward> rewards;"));
             Assert.IsTrue(code.Contains("[Serializable]"));
-            Assert.IsTrue(code.Contains("public class RewardSO"));
+            Assert.IsTrue(code.Contains("public class Reward"));
             Assert.IsTrue(code.Contains("public int itemId;"));
         }
 
@@ -117,11 +159,13 @@ namespace DataGraph.Tests.Editor
                 }),
             }));
 
-            var result = _gen.Generate(graph);
+            var result = _gen.GenerateEntries(graph);
 
             Assert.IsTrue(result.IsSuccess);
-            Assert.IsTrue(result.Value.Contains("public List<string> tags;"));
-            Assert.IsFalse(result.Value.Contains("[Serializable]"));
+            var code = result.Value;
+            Assert.IsTrue(code.Contains("public List<string> tags;"));
+            Assert.IsTrue(code.Contains("public class Item : DataGraphEntry"));
+            Assert.IsFalse(code.Contains("public class Tag"));
         }
 
         [Test]
@@ -135,7 +179,7 @@ namespace DataGraph.Tests.Editor
                 }),
             }));
 
-            var result = _gen.Generate(graph);
+            var result = _gen.GenerateEntries(graph);
 
             Assert.IsTrue(result.IsSuccess);
             Assert.IsTrue(result.Value.Contains("public Dictionary<string, string> props;"));
@@ -153,12 +197,12 @@ namespace DataGraph.Tests.Editor
                 }),
             }));
 
-            var result = _gen.Generate(graph);
+            var result = _gen.GenerateEntries(graph);
 
             Assert.IsTrue(result.IsSuccess);
             var code = result.Value;
-            Assert.IsTrue(code.Contains("public Dictionary<int, EffectSO> effects;"));
-            Assert.IsTrue(code.Contains("public class EffectSO"));
+            Assert.IsTrue(code.Contains("public Dictionary<int, Effect> effects;"));
+            Assert.IsTrue(code.Contains("public class Effect"));
         }
 
         [Test]
@@ -169,7 +213,7 @@ namespace DataGraph.Tests.Editor
                 new ParseableAssetField("icon", "B", "Sprite", AssetLoadMethod.Addressables),
             }));
 
-            var result = _gen.Generate(graph);
+            var result = _gen.GenerateEntries(graph);
 
             Assert.IsTrue(result.IsSuccess);
             Assert.IsTrue(result.Value.Contains("public Sprite icon;"));
@@ -189,7 +233,7 @@ namespace DataGraph.Tests.Editor
                 new ParseableCustomField("g", "G", FieldValueType.Color),
             }));
 
-            var result = _gen.Generate(graph);
+            var result = _gen.GenerateEntries(graph);
 
             Assert.IsTrue(result.IsSuccess);
             var code = result.Value;
@@ -203,24 +247,25 @@ namespace DataGraph.Tests.Editor
         }
 
         [Test]
-        public void GeneratedCode_ContainsAutoGeneratedHeader()
+        public void GeneratedCode_ContainsHeaderAndNamespace()
         {
             var graph = MakeGraph(new ParseableObjectRoot("Test", new ParseableNode[]
             {
                 new ParseableCustomField("x", "A", FieldValueType.Int),
             }));
 
-            var result = _gen.Generate(graph);
+            var result = _gen.GenerateEntries(graph);
 
             Assert.IsTrue(result.IsSuccess);
             Assert.IsTrue(result.Value.Contains("<auto-generated>"));
             Assert.IsTrue(result.Value.Contains("using UnityEngine;"));
+            Assert.IsTrue(result.Value.Contains("namespace DataGraph.Data"));
         }
 
         [Test]
         public void NullGraph_ReturnsFailure()
         {
-            var result = _gen.Generate(null);
+            var result = _gen.GenerateEntries(null);
 
             Assert.IsTrue(result.IsFailure);
         }

@@ -126,25 +126,40 @@ namespace DataGraph.Editor.Commands
                 }
 
                 var generatedFiles = new List<string>();
+                var graphOutputPath = Path.Combine(outputBasePath, graphName);
 
                 // 5. Generate C# (if SO)
                 if (formats.GenerateSO)
                 {
                     log.LogInfo("Generate: creating C# classes...");
-                    var codeGen = new CodeGenerator("SO");
-                    var codeResult = codeGen.Generate(graph);
-                    if (codeResult.IsFailure)
+                    var codeGen = new CodeGenerator();
+
+                    var entriesResult = codeGen.GenerateEntries(graph);
+                    if (entriesResult.IsFailure)
                     {
-                        log.LogError($"Generate failed: {codeResult.Error}");
+                        log.LogError($"Generate failed: {entriesResult.Error}");
                         log.Complete(false);
                         return false;
                     }
 
-                    var csPath = Path.Combine(outputBasePath, $"{graphName}.cs");
+                    var csPath = Path.Combine(graphOutputPath, $"{graphName}.cs");
                     EnsureDirectory(csPath);
-                    File.WriteAllText(csPath, codeResult.Value);
+                    File.WriteAllText(csPath, entriesResult.Value);
                     generatedFiles.Add(csPath);
-                    log.LogInfo($"Generate: {graphName}.cs");
+
+                    var dbResult = codeGen.GenerateDatabase(graph);
+                    if (dbResult.IsFailure)
+                    {
+                        log.LogError($"Generate failed: {dbResult.Error}");
+                        log.Complete(false);
+                        return false;
+                    }
+
+                    var dbCsPath = Path.Combine(graphOutputPath, $"{graphName}Database.cs");
+                    File.WriteAllText(dbCsPath, dbResult.Value);
+                    generatedFiles.Add(dbCsPath);
+
+                    log.LogInfo($"Generate: {graphName}.cs + {graphName}Database.cs");
                 }
 
                 // 6. Serialize JSON
@@ -160,7 +175,7 @@ namespace DataGraph.Editor.Commands
                         return false;
                     }
 
-                    var jsonPath = Path.Combine(outputBasePath, $"{graphName}.json");
+                    var jsonPath = Path.Combine(graphOutputPath, $"{graphName}.json");
                     EnsureDirectory(jsonPath);
                     File.WriteAllText(jsonPath, jsonResult.Value);
                     generatedFiles.Add(jsonPath);
@@ -169,7 +184,7 @@ namespace DataGraph.Editor.Commands
                     var schemaResult = schemaGen.Generate(graph);
                     if (schemaResult.IsSuccess)
                     {
-                        var schemaPath = Path.Combine(outputBasePath, $"{graphName}.schema.json");
+                        var schemaPath = Path.Combine(graphOutputPath, $"{graphName}.schema.json");
                         File.WriteAllText(schemaPath, schemaResult.Value);
                         generatedFiles.Add(schemaPath);
                     }
@@ -211,6 +226,85 @@ namespace DataGraph.Editor.Commands
                 return Result<ParsedDataTree>.Failure(adaptResult.Error);
 
             return _parserEngine.Parse(cachedData, adaptResult.Value, maxEntries);
+        }
+
+        /// <summary>
+        /// Creates SO .asset files from parsed data. Must be called after
+        /// code generation and Unity compilation since it needs the generated
+        /// types to exist at runtime.
+        /// </summary>
+        public async Task<bool> CreateSOAssetsAsync(
+            DataGraphAsset graphAsset,
+            ISheetProvider provider,
+            string outputBasePath,
+            GraphLogGroup log,
+            CancellationToken cancellationToken = default)
+        {
+            var graphName = !string.IsNullOrEmpty(graphAsset.GraphName)
+                ? graphAsset.GraphName
+                : graphAsset.name;
+
+            try
+            {
+                log.LogInfo("Adapt: reading graph structure...");
+                var adaptResult = _adapter.ReadGraph(graphAsset);
+                if (adaptResult.IsFailure)
+                {
+                    log.LogError($"Adapt failed: {adaptResult.Error}");
+                    log.Complete(false);
+                    return false;
+                }
+
+                var graph = adaptResult.Value;
+
+                log.LogInfo("Fetch: requesting data from sheet...");
+                var sheetRef = new SheetReference(
+                    graph.SheetId, graph.HeaderRowOffset, graph.SheetName);
+                var fetchResult = await provider.FetchAsync(sheetRef, cancellationToken);
+                if (fetchResult.IsFailure)
+                {
+                    log.LogError($"Fetch failed: {fetchResult.Error}");
+                    log.Complete(false);
+                    return false;
+                }
+
+                log.LogInfo("Parse: processing table data...");
+                var parseResult = _parserEngine.Parse(fetchResult.Value, graph);
+                if (parseResult.IsFailure)
+                {
+                    log.LogError($"Parse failed: {parseResult.Error}");
+                    log.Complete(false);
+                    return false;
+                }
+
+                log.LogInfo("Serialize: creating SO assets...");
+                var soSerializer = new Serialization.SODataSerializer();
+                var graphOutputPath = Path.Combine(outputBasePath, graphName);
+                var soResult = soSerializer.Serialize(parseResult.Value, graph, graphOutputPath);
+                if (soResult.IsFailure)
+                {
+                    log.LogError($"SO serialize failed: {soResult.Error}");
+                    log.Complete(false);
+                    return false;
+                }
+
+                AssetDatabase.Refresh();
+                log.LogSuccess($"Done: SO asset created at {soResult.Value}");
+                log.Complete(true);
+                return true;
+            }
+            catch (OperationCanceledException)
+            {
+                log.LogWarning("Cancelled by user");
+                log.Complete(false);
+                return false;
+            }
+            catch (Exception ex)
+            {
+                log.LogError($"Unexpected error: {ex.Message}");
+                log.Complete(false);
+                return false;
+            }
         }
 
         private static void EnsureDirectory(string filePath)

@@ -1,0 +1,22 @@
+[
+  {
+    "order": 1,
+    "name": "Forest",
+    "xpReward": 100
+  },
+  {
+    "order": 2,
+    "name": "Cave",
+    "xpReward": 200
+  },
+  {
+    "order": 3,
+    "name": "Castle",
+    "xpReward": 300
+  },
+  {
+    "order": 4,
+    "name": "Town",
+    "xpReward": 400
+  }
+]

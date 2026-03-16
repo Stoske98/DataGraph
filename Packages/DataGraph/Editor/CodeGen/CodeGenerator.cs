@@ -7,27 +7,16 @@ namespace DataGraph.Editor.CodeGen
 {
     /// <summary>
     /// Generates type-safe C# source code from a ParseableGraph definition.
-    /// Produces one file per graph containing the root class and all
-    /// nested classes. Generated code is standalone — no DataGraph
-    /// runtime dependency beyond Database base classes.
+    /// Produces one file per graph containing entry classes and a database
+    /// asset class. Entry classes inherit DataGraphEntry. Database classes
+    /// inherit typed DataGraphDatabaseAsset variants.
     /// </summary>
     internal sealed class CodeGenerator
     {
-        private readonly string _suffix;
-
         /// <summary>
-        /// Creates a generator with the given class name suffix (e.g. "SO" for V1).
+        /// Generates C# source for entry classes (e.g. Item, Reward).
         /// </summary>
-        public CodeGenerator(string suffix = "SO")
-        {
-            _suffix = suffix;
-        }
-
-        /// <summary>
-        /// Generates C# source code for the given graph.
-        /// Returns the complete file content as a string.
-        /// </summary>
-        public Result<string> Generate(ParseableGraph graph)
+        public Result<string> GenerateEntries(ParseableGraph graph)
         {
             if (graph == null)
                 return Result<string>.Failure("Graph is null.");
@@ -36,7 +25,33 @@ namespace DataGraph.Editor.CodeGen
             {
                 var writer = new CodeWriter();
                 WriteHeader(writer);
+                writer.BeginBlock("namespace DataGraph.Data");
                 WriteRootClass(writer, graph.Root);
+                writer.EndBlock();
+                return Result<string>.Success(writer.ToString());
+            }
+            catch (Exception ex)
+            {
+                return Result<string>.Failure($"Code generation failed: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Generates C# source for the database SO class (e.g. ItemsDatabase).
+        /// Must be in a separate file so Unity can map MonoScript by filename.
+        /// </summary>
+        public Result<string> GenerateDatabase(ParseableGraph graph)
+        {
+            if (graph == null)
+                return Result<string>.Failure("Graph is null.");
+
+            try
+            {
+                var writer = new CodeWriter();
+                WriteHeader(writer);
+                writer.BeginBlock("namespace DataGraph.Data");
+                WriteDatabaseClass(writer, graph.GraphName, graph.Root);
+                writer.EndBlock();
                 return Result<string>.Success(writer.ToString());
             }
             catch (Exception ex)
@@ -54,6 +69,7 @@ namespace DataGraph.Editor.CodeGen
             w.Line("using System;");
             w.Line("using System.Collections.Generic;");
             w.Line("using UnityEngine;");
+            w.Line("using DataGraph.Data;");
             w.BlankLine();
         }
 
@@ -82,29 +98,19 @@ namespace DataGraph.Editor.CodeGen
             bool isRoot,
             IReadOnlyList<ParseableNode> children)
         {
-            var className = typeName + _suffix;
-
+            w.Line("[Serializable]");
             if (isRoot)
-            {
-                w.BeginBlock($"public class {className} : ScriptableObject");
-            }
+                w.BeginBlock($"public class {typeName} : DataGraphEntry");
             else
-            {
-                w.Line("[Serializable]");
-                w.BeginBlock($"public class {className}");
-            }
+                w.BeginBlock($"public class {typeName}");
 
             foreach (var child in children)
-            {
                 WriteField(w, child);
-            }
 
             w.EndBlock();
 
             foreach (var child in children)
-            {
                 WriteNestedClasses(w, child);
-            }
         }
 
         private void WriteField(CodeWriter w, ParseableNode node)
@@ -121,7 +127,7 @@ namespace DataGraph.Editor.CodeGen
                     break;
 
                 case ParseableObjectField obj:
-                    w.Line($"public {obj.TypeName}{_suffix} {obj.FieldName};");
+                    w.Line($"public {obj.TypeName} {obj.FieldName};");
                     break;
 
                 case ParseableArrayField arr:
@@ -170,7 +176,7 @@ namespace DataGraph.Editor.CodeGen
             if (arr.Children.Count == 1 && arr.Children[0] is ParseableCustomField singleLeaf)
                 return TypeMapper.GetCSharpTypeName(singleLeaf.ValueType, singleLeaf.EnumType);
 
-            return arr.TypeName + _suffix;
+            return arr.TypeName;
         }
 
         private string GetDictionaryValueTypeName(ParseableDictionaryField dict)
@@ -178,7 +184,7 @@ namespace DataGraph.Editor.CodeGen
             if (dict.Children.Count == 1 && dict.Children[0] is ParseableCustomField singleLeaf)
                 return TypeMapper.GetCSharpTypeName(singleLeaf.ValueType, singleLeaf.EnumType);
 
-            return dict.TypeName + _suffix;
+            return dict.TypeName;
         }
 
         private static bool HasStructuralChildren(ParseableNode node)
@@ -186,6 +192,39 @@ namespace DataGraph.Editor.CodeGen
             if (node.Children.Count == 1 && node.Children[0] is ParseableCustomField)
                 return false;
             return node.Children.Count > 0;
+        }
+
+        private void WriteDatabaseClass(CodeWriter w, string graphName, ParseableNode root)
+        {
+            var dbClassName = $"{graphName}Database";
+
+            switch (root)
+            {
+                case ParseableDictionaryRoot dict:
+                {
+                    var entryClass = dict.TypeName;
+                    var keyType = TypeMapper.GetKeyTypeName(dict.KeyType);
+                    w.BeginBlock($"public class {dbClassName} : DictionaryDatabaseAsset<{keyType}, {entryClass}>");
+                    w.EndBlock();
+                    break;
+                }
+
+                case ParseableArrayRoot arr:
+                {
+                    var entryClass = arr.TypeName;
+                    w.BeginBlock($"public class {dbClassName} : ArrayDatabaseAsset<{entryClass}>");
+                    w.EndBlock();
+                    break;
+                }
+
+                case ParseableObjectRoot obj:
+                {
+                    var entryClass = obj.TypeName;
+                    w.BeginBlock($"public class {dbClassName} : ObjectDatabaseAsset<{entryClass}>");
+                    w.EndBlock();
+                    break;
+                }
+            }
         }
     }
 }

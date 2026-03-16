@@ -185,8 +185,10 @@ namespace DataGraph.Editor.UI
             else
             {
                 EditorGUI.BeginDisabledGroup(selectedCount == 0);
-                if (GUILayout.Button($"Parse selected ({selectedCount})", GUILayout.Width(140)))
+                if (GUILayout.Button($"Parse ({selectedCount})", GUILayout.Width(100)))
                     RunParseAsync();
+                if (GUILayout.Button($"Create SO Assets ({selectedCount})", GUILayout.Width(160)))
+                    RunCreateSOAsync();
                 EditorGUI.EndDisabledGroup();
             }
 
@@ -370,6 +372,57 @@ namespace DataGraph.Editor.UI
 
                     var task = command.ExecuteAsync(
                         entry.GraphAsset, provider, formats,
+                        _outputPath, log, _cts.Token);
+                    tasks.Add(task);
+                }
+
+                await Task.WhenAll(tasks);
+            }
+            catch (Exception ex)
+            {
+                var errorGroup = _console.BeginGroup("(error)");
+                errorGroup.LogError(ex.Message);
+                errorGroup.Complete(false);
+            }
+            finally
+            {
+                _isRunning = false;
+                _cts?.Dispose();
+                _cts = null;
+                Repaint();
+            }
+        }
+
+        private async void RunCreateSOAsync()
+        {
+            _isRunning = true;
+            _console.Clear();
+            _cts = new CancellationTokenSource();
+            Repaint();
+
+            try
+            {
+                var provider = ResolveProvider();
+                if (provider == null)
+                {
+                    var errorGroup = _console.BeginGroup("(all)");
+                    errorGroup.LogError("No data source provider available.");
+                    errorGroup.Complete(false);
+                    return;
+                }
+
+                var command = new ParseGraphCommand();
+                var selected = _graphEntries.Where(e => e.Selected).ToList();
+                var tasks = new List<Task>();
+
+                foreach (var entry in selected)
+                {
+                    if (_cts.Token.IsCancellationRequested)
+                        break;
+
+                    var log = _console.BeginGroup(entry.DisplayName + " (SO)");
+                    var task = command.CreateSOAssetsAsync(
+                        entry.GraphAsset, provider,
                         _outputPath, log, _cts.Token);
                     tasks.Add(task);
                 }
