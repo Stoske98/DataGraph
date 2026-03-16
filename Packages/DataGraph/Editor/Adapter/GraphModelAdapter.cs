@@ -210,7 +210,21 @@ namespace DataGraph.Editor.Adapter
                     GetOption<string>(node, "TypeName"),
                     children),
 
-                ArrayFieldNode => CreateArrayField(node, children),
+                VerticalArrayFieldNode => new ParseableArrayField(
+                    GetOption<string>(node, "FieldName"),
+                    GetOption<string>(node, "TypeName"),
+                    ArrayMode.Vertical,
+                    GetColumnOption(node, "IndexColumn"),
+                    null,
+                    children),
+
+                HorizontalArrayFieldNode => new ParseableArrayField(
+                    GetOption<string>(node, "FieldName"),
+                    null,
+                    ArrayMode.Horizontal,
+                    null,
+                    GetOption<string>(node, "Separator"),
+                    children),
 
                 DictionaryFieldNode => new ParseableDictionaryField(
                     GetOption<string>(node, "FieldName"),
@@ -266,18 +280,6 @@ namespace DataGraph.Editor.Adapter
             };
         }
 
-        private ParseableArrayField CreateArrayField(Node node, ParseableNode[] children)
-        {
-            var mode = GetOption<ArrayMode>(node, "ArrayMode");
-            return new ParseableArrayField(
-                GetOption<string>(node, "FieldName"),
-                GetOption<string>(node, "TypeName"),
-                mode,
-                mode == ArrayMode.Vertical ? GetColumnOption(node, "IndexColumn") : null,
-                mode == ArrayMode.Horizontal ? GetOption<string>(node, "Separator") : null,
-                children);
-        }
-
         private ParseableCustomField CreateNumberField(Node node)
         {
             var numberType = GetOption<NumberType>(node, "NumberType");
@@ -292,20 +294,6 @@ namespace DataGraph.Editor.Adapter
                 GetOption<string>(node, "FieldName"),
                 GetColumnOption(node, "Column"),
                 fieldValueType, null, null, null);
-        }
-
-        private ParseableCustomField CreateEnumField(Node node)
-        {
-            var enumTypeName = GetOption<string>(node, "EnumType");
-            Type enumType = null;
-            if (!string.IsNullOrEmpty(enumTypeName))
-                enumType = Type.GetType(enumTypeName);
-
-            return new ParseableCustomField(
-                GetOption<string>(node, "FieldName"),
-                GetColumnOption(node, "Column"),
-                FieldValueType.Enum,
-                null, null, enumType);
         }
 
         /// <summary>
