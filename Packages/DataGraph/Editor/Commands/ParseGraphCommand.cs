@@ -34,6 +34,7 @@ namespace DataGraph.Editor.Commands
         {
             public bool GenerateSO { get; set; }
             public bool GenerateJSON { get; set; }
+            public bool GenerateBlob { get; set; }
         }
 
         /// <summary>
@@ -132,6 +133,7 @@ namespace DataGraph.Editor.Commands
                 if (formats.GenerateSO)
                 {
                     log.LogInfo("Generate: creating C# classes...");
+                    var soPath = Path.Combine(graphOutputPath, "SO");
                     var codeGen = new CodeGenerator();
 
                     var entriesResult = codeGen.GenerateEntries(graph);
@@ -142,7 +144,7 @@ namespace DataGraph.Editor.Commands
                         return false;
                     }
 
-                    var csPath = Path.Combine(graphOutputPath, $"{graphName}.cs");
+                    var csPath = Path.Combine(soPath, $"{graphName}.cs");
                     EnsureDirectory(csPath);
                     File.WriteAllText(csPath, entriesResult.Value);
                     generatedFiles.Add(csPath);
@@ -155,17 +157,34 @@ namespace DataGraph.Editor.Commands
                         return false;
                     }
 
-                    var dbCsPath = Path.Combine(graphOutputPath, $"{graphName}Database.cs");
+                    var dbCsPath = Path.Combine(soPath, $"{graphName}Database.cs");
                     File.WriteAllText(dbCsPath, dbResult.Value);
                     generatedFiles.Add(dbCsPath);
 
-                    log.LogInfo($"Generate: {graphName}.cs + {graphName}Database.cs");
+                    log.LogInfo($"Generate: SO/{graphName}.cs + SO/{graphName}Database.cs");
+                }
+
+                // 5b. Generate Blob structs (if Blob)
+                if (formats.GenerateBlob)
+                {
+                    log.LogInfo("Generate: creating Blob structs...");
+                    var blobPath = Path.Combine(graphOutputPath, "Blob");
+                    var blobGenResult = InvokeBlobCodeGen(graph, blobPath, graphName);
+                    if (blobGenResult.IsFailure)
+                    {
+                        log.LogError($"Blob generate failed: {blobGenResult.Error}");
+                        log.Complete(false);
+                        return false;
+                    }
+                    generatedFiles.AddRange(blobGenResult.Value);
+                    log.LogInfo($"Generate: Blob/{graphName}Blob.cs + Blob/{graphName}BlobDatabase.cs + Blob/{graphName}BlobBuilder.cs");
                 }
 
                 // 6. Serialize JSON
                 if (formats.GenerateJSON)
                 {
                     log.LogInfo("Serialize: writing JSON output...");
+                    var jsonPath = Path.Combine(graphOutputPath, "JSON");
                     var jsonSerializer = new JsonDataSerializer();
                     var jsonResult = jsonSerializer.Serialize(dataTree);
                     if (jsonResult.IsFailure)
@@ -175,21 +194,21 @@ namespace DataGraph.Editor.Commands
                         return false;
                     }
 
-                    var jsonPath = Path.Combine(graphOutputPath, $"{graphName}.json");
-                    EnsureDirectory(jsonPath);
-                    File.WriteAllText(jsonPath, jsonResult.Value);
-                    generatedFiles.Add(jsonPath);
+                    var jsonFilePath = Path.Combine(jsonPath, $"{graphName}.json");
+                    EnsureDirectory(jsonFilePath);
+                    File.WriteAllText(jsonFilePath, jsonResult.Value);
+                    generatedFiles.Add(jsonFilePath);
 
                     var schemaGen = new JsonSchemaGenerator();
                     var schemaResult = schemaGen.Generate(graph);
                     if (schemaResult.IsSuccess)
                     {
-                        var schemaPath = Path.Combine(graphOutputPath, $"{graphName}.schema.json");
+                        var schemaPath = Path.Combine(jsonPath, $"{graphName}.schema.json");
                         File.WriteAllText(schemaPath, schemaResult.Value);
                         generatedFiles.Add(schemaPath);
                     }
 
-                    log.LogInfo($"Serialize: {graphName}.json + schema");
+                    log.LogInfo($"Serialize: JSON/{graphName}.json + schema");
                 }
 
                 AssetDatabase.Refresh();
@@ -279,7 +298,7 @@ namespace DataGraph.Editor.Commands
 
                 log.LogInfo("Serialize: creating SO assets...");
                 var soSerializer = new Serialization.SODataSerializer();
-                var graphOutputPath = Path.Combine(outputBasePath, graphName);
+                var graphOutputPath = Path.Combine(outputBasePath, graphName, "SO");
                 var soResult = soSerializer.Serialize(parseResult.Value, graph, graphOutputPath);
                 if (soResult.IsFailure)
                 {
@@ -289,6 +308,11 @@ namespace DataGraph.Editor.Commands
                 }
 
                 AssetDatabase.Refresh();
+
+                var soAsset = AssetDatabase.LoadAssetAtPath<DataGraph.Data.DataGraphDatabaseAsset>(soResult.Value);
+                if (soAsset != null)
+                    UpdateRegistry(registry => registry.RegisterSO(soAsset));
+
                 log.LogSuccess($"Done: SO asset created at {soResult.Value}");
                 log.Complete(true);
                 return true;
@@ -307,11 +331,346 @@ namespace DataGraph.Editor.Commands
             }
         }
 
+        /// <summary>
+        /// Creates a .blob file by populating generated Source structs from
+        /// ParsedDataTree, invoking the generated BlobBuilder, and writing
+        /// the raw blob bytes to disk.
+        /// </summary>
+        public async Task<bool> CreateBlobAssetsAsync(
+            DataGraphAsset graphAsset,
+            ISheetProvider provider,
+            string outputBasePath,
+            GraphLogGroup log,
+            CancellationToken cancellationToken = default)
+        {
+            var graphName = !string.IsNullOrEmpty(graphAsset.GraphName)
+                ? graphAsset.GraphName
+                : graphAsset.name;
+
+            try
+            {
+                log.LogInfo("Adapt: reading graph structure...");
+                var adaptResult = _adapter.ReadGraph(graphAsset);
+                if (adaptResult.IsFailure)
+                {
+                    log.LogError($"Adapt failed: {adaptResult.Error}");
+                    log.Complete(false);
+                    return false;
+                }
+
+                var graph = adaptResult.Value;
+
+                log.LogInfo("Fetch: requesting data from source...");
+                var sheetRef = new SheetReference(
+                    graph.SheetId, graph.HeaderRowOffset, graph.SheetName);
+                var fetchResult = await provider.FetchAsync(sheetRef, cancellationToken);
+                if (fetchResult.IsFailure)
+                {
+                    log.LogError($"Fetch failed: {fetchResult.Error}");
+                    log.Complete(false);
+                    return false;
+                }
+
+                log.LogInfo("Parse: processing table data...");
+                var parseResult = _parserEngine.Parse(fetchResult.Value, graph);
+                if (parseResult.IsFailure)
+                {
+                    log.LogError($"Parse failed: {parseResult.Error}");
+                    log.Complete(false);
+                    return false;
+                }
+
+                log.LogInfo("Serialize: creating Blob asset...");
+                var graphOutputPath = Path.Combine(outputBasePath, graphName, "Blob");
+
+                var builderTypeName = $"DataGraph.Data.{graphName}BlobDatabaseBuilder";
+                var builderType = FindType(builderTypeName);
+                if (builderType == null)
+                {
+                    log.LogError($"Type '{builderTypeName}' not found. Run Parse with Blob enabled first.");
+                    log.Complete(false);
+                    return false;
+                }
+
+                var buildMethod = builderType.GetMethod("Build",
+                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                if (buildMethod == null)
+                {
+                    log.LogError("Build method not found on generated BlobBuilder.");
+                    log.Complete(false);
+                    return false;
+                }
+
+                var sourceTypeName = $"DataGraph.Data.{graphName}BlobDatabaseBuilder+{GetRootTypeName(graph.Root)}BlobSource";
+                var sourceType = FindType(sourceTypeName);
+                if (sourceType == null)
+                {
+                    sourceType = builderType.GetNestedType($"{GetRootTypeName(graph.Root)}BlobSource");
+                }
+                if (sourceType == null)
+                {
+                    log.LogError($"Source type not found for '{graphName}'.");
+                    log.Complete(false);
+                    return false;
+                }
+
+                var buildParams = buildMethod.GetParameters();
+                object[] buildArgs;
+
+                if (parseResult.Value.Root is Domain.ParsedDictionary dict)
+                {
+                    var keyType = dict.KeyTypeName == "int" ? typeof(int) : typeof(string);
+                    var keys = Array.CreateInstance(keyType, dict.Entries.Count);
+                    var values = Array.CreateInstance(sourceType, dict.Entries.Count);
+
+                    int idx = 0;
+                    foreach (var kvp in dict.Entries)
+                    {
+                        var key = keyType == typeof(int) ? (object)Convert.ToInt32(kvp.Key) : kvp.Key.ToString();
+                        keys.SetValue(key, idx);
+                        var source = PopulateSource(sourceType, kvp.Value);
+                        values.SetValue(source, idx);
+                        idx++;
+                    }
+
+                    buildArgs = new object[] { keys, values };
+                }
+                else if (parseResult.Value.Root is Domain.ParsedArray arr)
+                {
+                    var values = Array.CreateInstance(sourceType, arr.Elements.Count);
+                    for (int i = 0; i < arr.Elements.Count; i++)
+                    {
+                        var source = PopulateSource(sourceType, arr.Elements[i]);
+                        values.SetValue(source, i);
+                    }
+                    buildArgs = new object[] { values };
+                }
+                else if (parseResult.Value.Root is Domain.ParsedObject obj)
+                {
+                    var source = PopulateSource(sourceType, obj);
+                    buildArgs = new object[] { source };
+                }
+                else
+                {
+                    log.LogError("Unknown root type for Blob serialization.");
+                    log.Complete(false);
+                    return false;
+                }
+
+                var blobRef = buildMethod.Invoke(null, buildArgs);
+
+                var blobFilePath = Path.Combine(graphOutputPath, $"{graphName}.blob");
+                EnsureDirectory(blobFilePath);
+
+                var saveMethod = builderType.GetMethod("Save",
+                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                if (saveMethod == null)
+                {
+                    log.LogError("Save method not found on generated BlobBuilder. Re-parse with Blob enabled.");
+                    log.Complete(false);
+                    return false;
+                }
+                saveMethod.Invoke(null, new[] { blobRef, blobFilePath });
+
+                var disposeMethod = blobRef.GetType().GetMethod("Dispose");
+                disposeMethod?.Invoke(blobRef, null);
+
+                UnityEditor.AssetDatabase.Refresh();
+
+                var blobFileName = $"{graphName}.blob";
+                UpdateRegistry(registry => registry.RegisterBlob(
+                    $"{builderTypeName}, Assembly-CSharp", blobFileName));
+
+                log.LogSuccess($"Done: Blob asset created at {blobFilePath}");
+                log.Complete(true);
+                return true;
+            }
+            catch (OperationCanceledException)
+            {
+                log.LogWarning("Cancelled by user");
+                log.Complete(false);
+                return false;
+            }
+            catch (Exception ex)
+            {
+                log.LogError($"Unexpected error: {ex.Message}");
+                log.Complete(false);
+                return false;
+            }
+        }
+
+        private static object PopulateSource(Type sourceType, Domain.ParsedNode node)
+        {
+            var instance = Activator.CreateInstance(sourceType);
+
+            if (node is Domain.ParsedObject obj)
+            {
+                foreach (var child in obj.Children)
+                {
+                    var field = sourceType.GetField(child.FieldName,
+                        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                    if (field == null)
+                        continue;
+
+                    object value = child switch
+                    {
+                        Domain.ParsedValue val => ConvertForSource(field.FieldType, val.Value),
+                        Domain.ParsedAssetReference assetRef => assetRef.AssetPath ?? "",
+                        Domain.ParsedObject childObj => PopulateSource(field.FieldType, childObj),
+                        Domain.ParsedArray childArr => PopulateSourceArray(field.FieldType, childArr),
+                        _ => null
+                    };
+
+                    if (value != null)
+                        field.SetValue(instance, value);
+                }
+            }
+
+            return instance;
+        }
+
+        private static Array PopulateSourceArray(Type fieldType, Domain.ParsedArray arr)
+        {
+            var elementType = fieldType.GetElementType();
+            if (elementType == null)
+                return null;
+
+            var array = Array.CreateInstance(elementType, arr.Elements.Count);
+            for (int i = 0; i < arr.Elements.Count; i++)
+            {
+                object element = arr.Elements[i] switch
+                {
+                    Domain.ParsedValue val => ConvertForSource(elementType, val.Value),
+                    Domain.ParsedObject obj => PopulateSource(elementType, obj),
+                    _ => null
+                };
+                if (element != null)
+                    array.SetValue(element, i);
+            }
+            return array;
+        }
+
+        private static object ConvertForSource(Type targetType, object value)
+        {
+            if (value == null)
+                return targetType == typeof(string) ? "" : null;
+            if (targetType.IsInstanceOfType(value))
+                return value;
+            if (targetType == typeof(string))
+                return value.ToString();
+            if (targetType == typeof(int))
+                return Convert.ToInt32(value);
+            if (targetType == typeof(float))
+                return Convert.ToSingle(value);
+            if (targetType == typeof(double))
+                return Convert.ToDouble(value);
+            if (targetType == typeof(bool))
+                return Convert.ToBoolean(value);
+
+            try
+            { return Convert.ChangeType(value, targetType, System.Globalization.CultureInfo.InvariantCulture); }
+            catch { return targetType.IsValueType ? Activator.CreateInstance(targetType) : null; }
+        }
+
+        private static string GetRootTypeName(Domain.ParseableNode root)
+        {
+            return root switch
+            {
+                Domain.ParseableDictionaryRoot dict => dict.TypeName,
+                Domain.ParseableArrayRoot arr => arr.TypeName,
+                Domain.ParseableObjectRoot obj => obj.TypeName,
+                _ => "Unknown"
+            };
+        }
+
+        private static Type FindType(string typeName)
+        {
+            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                var type = assembly.GetType(typeName);
+                if (type != null)
+                    return type;
+            }
+            return null;
+        }
+
         private static void EnsureDirectory(string filePath)
         {
             var dir = Path.GetDirectoryName(filePath);
             if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
                 Directory.CreateDirectory(dir);
+        }
+
+        private static void UpdateRegistry(Action<DataGraph.Runtime.DataGraphRegistry> action)
+        {
+            var guids = AssetDatabase.FindAssets("t:DataGraphRegistry");
+            DataGraph.Runtime.DataGraphRegistry registry;
+
+            if (guids.Length > 0)
+            {
+                var path = AssetDatabase.GUIDToAssetPath(guids[0]);
+                registry = AssetDatabase.LoadAssetAtPath<DataGraph.Runtime.DataGraphRegistry>(path);
+            }
+            else
+            {
+                registry = UnityEngine.ScriptableObject.CreateInstance<DataGraph.Runtime.DataGraphRegistry>();
+                var registryPath = "Assets/DataGraph/DataGraphRegistry.asset";
+                EnsureDirectory(registryPath);
+                AssetDatabase.CreateAsset(registry, registryPath);
+            }
+
+            if (registry == null)
+                return;
+
+            action(registry);
+            registry.CleanUp();
+            EditorUtility.SetDirty(registry);
+            AssetDatabase.SaveAssets();
+        }
+
+        /// <summary>
+        /// Invokes BlobCodeGenerator through reflection since DataGraph.Editor
+        /// does not reference DataGraph.Blob directly.
+        /// </summary>
+        private static Result<List<string>> InvokeBlobCodeGen(
+            ParseableGraph graph, string outputPath, string graphName)
+        {
+            try
+            {
+                var gen = new CodeGen.BlobCodeGenerator();
+                var files = new List<string>();
+
+                var entriesResult = gen.GenerateEntries(graph);
+                if (entriesResult.IsFailure)
+                    return Result<List<string>>.Failure(entriesResult.Error);
+
+                var blobCsPath = Path.Combine(outputPath, $"{graphName}Blob.cs");
+                EnsureDirectory(blobCsPath);
+                File.WriteAllText(blobCsPath, entriesResult.Value);
+                files.Add(blobCsPath);
+
+                var dbResult = gen.GenerateDatabase(graph);
+                if (dbResult.IsFailure)
+                    return Result<List<string>>.Failure(dbResult.Error);
+
+                var dbCsPath = Path.Combine(outputPath, $"{graphName}BlobDatabase.cs");
+                File.WriteAllText(dbCsPath, dbResult.Value);
+                files.Add(dbCsPath);
+
+                var builderResult = gen.GenerateBuilder(graph);
+                if (builderResult.IsFailure)
+                    return Result<List<string>>.Failure(builderResult.Error);
+
+                var builderCsPath = Path.Combine(outputPath, $"{graphName}BlobBuilder.cs");
+                File.WriteAllText(builderCsPath, builderResult.Value);
+                files.Add(builderCsPath);
+
+                return Result<List<string>>.Success(files);
+            }
+            catch (Exception ex)
+            {
+                return Result<List<string>>.Failure($"Blob code generation failed: {ex.Message}");
+            }
         }
     }
 }

@@ -14,6 +14,8 @@ namespace DataGraph.Editor
             "DataGraph.GoogleSheets.GoogleSheetsProvider, DataGraph.GoogleSheets";
         private const string LocalFileTypeName =
             "DataGraph.LocalFile.LocalFileProvider, DataGraph.LocalFile";
+        private const string BlobCodeGeneratorTypeName =
+            "DataGraph.Blob.BlobCodeGenerator, DataGraph.Blob";
 
         /// <summary>
         /// Whether the Google Sheets provider assembly is available.
@@ -55,6 +57,14 @@ namespace DataGraph.Editor
                     "Local File provider is not installed.");
 
             return (ISheetProvider)Activator.CreateInstance(type);
+        }
+
+        /// <summary>
+        /// Whether Blob output is available (requires Unity Entities package).
+        /// </summary>
+        public static bool IsBlobAvailable()
+        {
+            return Type.GetType("Unity.Entities.BlobBuilder, Unity.Entities") != null;
         }
     }
 }

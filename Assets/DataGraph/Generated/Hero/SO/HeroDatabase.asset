@@ -9,7 +9,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e8a7005c3d29a1748b84e2c8f749a24e, type: 3}
+  m_Script: {fileID: 11500000, guid: 60b4b8b64a270ff4cab788eb466207d1, type: 3}
   m_Name: HeroDatabase
   m_EditorClassIdentifier: Assembly-CSharp::DataGraph.Data.HeroDatabase
   _keys: 0100000002000000

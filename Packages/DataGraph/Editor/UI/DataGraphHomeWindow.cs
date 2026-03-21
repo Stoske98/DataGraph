@@ -250,8 +250,8 @@ namespace DataGraph.Editor.UI
                 EditorGUI.BeginDisabledGroup(selectedCount == 0);
                 if (GUILayout.Button($"Parse ({selectedCount})", GUILayout.Width(85), GUILayout.Height(22)))
                     RunParseAsync();
-                if (GUILayout.Button($"Create SO ({selectedCount})", GUILayout.Width(100), GUILayout.Height(22)))
-                    RunCreateSOAsync();
+                if (GUILayout.Button($"Create Assets ({selectedCount})", GUILayout.Width(120), GUILayout.Height(22)))
+                    RunCreateAssetsAsync();
                 EditorGUI.EndDisabledGroup();
             }
 
@@ -270,12 +270,16 @@ namespace DataGraph.Editor.UI
                 return;
             }
 
+            var blobAvailable = ProviderRegistry.IsBlobAvailable();
+
             EditorGUILayout.BeginHorizontal(EditorStyles.toolbar);
             EditorGUILayout.LabelField("", GUILayout.Width(20));
             EditorGUILayout.LabelField("Graph", EditorStyles.miniLabel, GUILayout.MinWidth(80));
             EditorGUILayout.LabelField("Sheet Tab", EditorStyles.miniLabel, GUILayout.Width(65));
             EditorGUILayout.LabelField("SO", EditorStyles.miniLabel, GUILayout.Width(25));
             EditorGUILayout.LabelField("JSON", EditorStyles.miniLabel, GUILayout.Width(32));
+            if (blobAvailable)
+                EditorGUILayout.LabelField("Blob", EditorStyles.miniLabel, GUILayout.Width(30));
             EditorGUILayout.LabelField("", GUILayout.Width(30));
             EditorGUILayout.EndHorizontal();
 
@@ -306,6 +310,8 @@ namespace DataGraph.Editor.UI
                 EditorGUILayout.LabelField(entry.GraphAsset.SheetName, EditorStyles.miniLabel, GUILayout.Width(65));
                 entry.GenerateSO = EditorGUILayout.Toggle(entry.GenerateSO, GUILayout.Width(25));
                 entry.GenerateJSON = EditorGUILayout.Toggle(entry.GenerateJSON, GUILayout.Width(32));
+                if (blobAvailable)
+                    entry.GenerateBlob = EditorGUILayout.Toggle(entry.GenerateBlob, GUILayout.Width(30));
 
                 if (GUILayout.Button("...", EditorStyles.miniButton, GUILayout.Width(25)))
                 {
@@ -347,7 +353,7 @@ namespace DataGraph.Editor.UI
             _editHeaderOffset = EditorGUILayout.IntField("Header Offset", _editHeaderOffset);
 
             EditorGUILayout.BeginHorizontal();
-            
+
             bool shouldDelete = false;
             var prevBg = GUI.backgroundColor;
             GUI.backgroundColor = new Color(0.9f, 0.3f, 0.3f);
@@ -705,7 +711,8 @@ namespace DataGraph.Editor.UI
                     var formats = new ParseGraphCommand.FormatSelection
                     {
                         GenerateSO = entry.GenerateSO,
-                        GenerateJSON = entry.GenerateJSON
+                        GenerateJSON = entry.GenerateJSON,
+                        GenerateBlob = entry.GenerateBlob
                     };
                     tasks.Add(command.ExecuteAsync(
                         entry.GraphAsset, provider, formats,
@@ -729,7 +736,7 @@ namespace DataGraph.Editor.UI
             }
         }
 
-        private async void RunCreateSOAsync()
+        private async void RunCreateAssetsAsync()
         {
             _isRunning = true;
             _console.Clear();
@@ -746,19 +753,33 @@ namespace DataGraph.Editor.UI
                 {
                     if (_cts.Token.IsCancellationRequested) break;
 
+                    if (!entry.GenerateSO && !entry.GenerateBlob)
+                        continue;
+
                     var provider = ResolveProviderForGraph(entry.GraphAsset.SheetId);
                     if (provider == null)
                     {
-                        var g = _console.BeginGroup(entry.DisplayName + " (SO)");
+                        var g = _console.BeginGroup(entry.DisplayName + " (Assets)");
                         g.LogError("No provider available for this data source.");
                         g.Complete(false);
                         continue;
                     }
 
-                    var log = _console.BeginGroup(entry.DisplayName + " (SO)");
-                    tasks.Add(command.CreateSOAssetsAsync(
-                        entry.GraphAsset, provider,
-                        _outputPath, log, _cts.Token));
+                    if (entry.GenerateSO)
+                    {
+                        var log = _console.BeginGroup(entry.DisplayName + " (SO)");
+                        tasks.Add(command.CreateSOAssetsAsync(
+                            entry.GraphAsset, provider,
+                            _outputPath, log, _cts.Token));
+                    }
+
+                    if (entry.GenerateBlob)
+                    {
+                        var log = _console.BeginGroup(entry.DisplayName + " (Blob)");
+                        tasks.Add(command.CreateBlobAssetsAsync(
+                            entry.GraphAsset, provider,
+                            _outputPath, log, _cts.Token));
+                    }
                 }
 
                 await Task.WhenAll(tasks);
@@ -782,9 +803,9 @@ namespace DataGraph.Editor.UI
 
         private void RefreshGraphList()
         {
-            var previousSelection = new Dictionary<string, (bool selected, bool so, bool json)>();
+            var previousSelection = new Dictionary<string, (bool selected, bool so, bool json, bool blob)>();
             foreach (var e in _graphEntries)
-                previousSelection[e.AssetPath] = (e.Selected, e.GenerateSO, e.GenerateJSON);
+                previousSelection[e.AssetPath] = (e.Selected, e.GenerateSO, e.GenerateJSON, e.GenerateBlob);
 
             _graphEntries.Clear();
             var guids = AssetDatabase.FindAssets("");
@@ -805,7 +826,8 @@ namespace DataGraph.Editor.UI
                         : Path.GetFileNameWithoutExtension(path),
                     Selected = false,
                     GenerateSO = true,
-                    GenerateJSON = true
+                    GenerateJSON = true,
+                    GenerateBlob = false
                 };
 
                 if (previousSelection.TryGetValue(path, out var prev))
@@ -813,6 +835,7 @@ namespace DataGraph.Editor.UI
                     entry.Selected = prev.selected;
                     entry.GenerateSO = prev.so;
                     entry.GenerateJSON = prev.json;
+                    entry.GenerateBlob = prev.blob;
                 }
 
                 _graphEntries.Add(entry);
@@ -992,6 +1015,7 @@ namespace DataGraph.Editor.UI
             public bool Selected;
             public bool GenerateSO;
             public bool GenerateJSON;
+            public bool GenerateBlob;
         }
     }
 }

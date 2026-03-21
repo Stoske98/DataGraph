@@ -1,0 +1,24 @@
+{
+    "name": "DataGraph.Blob",
+    "rootNamespace": "DataGraph.Blob",
+    "references": [
+        "DataGraph.Runtime",
+        "Unity.Entities",
+        "Unity.Collections"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": true,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [
+        {
+            "name": "com.unity.entities",
+            "expression": "1.0.0",
+            "define": "DATAGRAPH_ENTITIES"
+        }
+    ],
+    "noEngineReferences": false
+}

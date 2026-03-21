@@ -131,8 +131,8 @@ GameObject:
   - component: {fileID: 330585545}
   - component: {fileID: 330585544}
   - component: {fileID: 330585547}
-  - component: {fileID: 330585549}
   - component: {fileID: 330585548}
+  - component: {fileID: 330585549}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -279,11 +279,10 @@ MonoBehaviour:
   m_GameObject: {fileID: 330585543}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: da339a86ee9eb1f47bfc5c07014dddb1, type: 3}
+  m_Script: {fileID: 11500000, guid: bf78f79e20f17284ba58822e37ca9b8d, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: DataGraph.Runtime::DataGraph.Runtime.DatabaseLoader
-  _databases:
-  - {fileID: 11400000, guid: df215e3d4b80fda4bb75bb7a993e51f8, type: 2}
+  m_EditorClassIdentifier: DataGraph.Runtime::DataGraph.Runtime.DataGraphLoader
+  _registry: {fileID: 11400000, guid: bdf9128e18a548c42a6c1486513a81b4, type: 2}
 --- !u!1 &410087039
 GameObject:
   m_ObjectHideFlags: 0
