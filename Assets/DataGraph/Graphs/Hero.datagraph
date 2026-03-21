@@ -163,7 +163,7 @@ MonoBehaviour:
     - rid: 6162499193984778338
       type: {class: DataGraphAsset, ns: DataGraph.Editor.Nodes, asm: DataGraph.Editor}
       data:
-        _sheetId: https://docs.google.com/spreadsheets/d/1rG-RIIKPiJE2pSM_iSrgOIqMCSuA0qtPM1ZCtufzbFk/edit?usp=sharing
+        _sheetId: C:/Users/Joca/Downloads/DataGraph.xlsx
         _sheetName: Nested
         _headerRowOffset: 1
         _graphName: Hero
@@ -632,15 +632,15 @@ MonoBehaviour:
           m_KeyList:
           - __option_FieldName
           - __option_Column
-          - __option_AssetTypeName
           - __option_LoadMethod
           - Parent
+          - __option_AssetType
           m_ValueList:
           - rid: 6162499276577177733
           - rid: 6162499276577177734
-          - rid: 6162499276577177735
           - rid: 6162499276577177736
           - rid: 6162499276577177737
+          - rid: 6162499276577178069
         m_InputPortInfos:
           expandedPortsById:
             m_KeyList: []
@@ -664,10 +664,6 @@ MonoBehaviour:
       type: {class: 'Constant`1[[System.String, mscorlib]]', ns: Unity.GraphToolkit.Editor, asm: Unity.GraphToolkit.Internal.Editor}
       data:
         m_Value: E
-    - rid: 6162499276577177735
-      type: {class: 'Constant`1[[System.String, mscorlib]]', ns: Unity.GraphToolkit.Editor, asm: Unity.GraphToolkit.Internal.Editor}
-      data:
-        m_Value: Sprite
     - rid: 6162499276577177736
       type: {class: EnumConstant, ns: Unity.GraphToolkit.Editor, asm: Unity.GraphToolkit.Internal.Editor}
       data:
@@ -687,7 +683,7 @@ MonoBehaviour:
       data:
         _fieldName: 
         _column: 
-        _assetTypeName: 
+        _assetType: 0
         _loadMethod: 2
     - rid: 6162499276577177739
       type: {class: WireModel, ns: Unity.GraphToolkit.Editor, asm: Unity.GraphToolkit.Internal.Editor}
@@ -721,3 +717,14 @@ MonoBehaviour:
           m_PortDirection: 1
           m_PortOrientation: 0
           m_Title: Parent
+    - rid: 6162499276577178069
+      type: {class: EnumConstant, ns: Unity.GraphToolkit.Editor, asm: Unity.GraphToolkit.Internal.Editor}
+      data:
+        m_Value:
+          m_EnumType:
+            m_Identification: DataGraph.Editor.Domain.AssetType, DataGraph.Editor,
+              Version=0.0.0.0, Culture=neutral, PublicKeyToken=null
+          m_Value: 0
+        m_EnumType:
+          m_Identification: DataGraph.Editor.Domain.AssetType, DataGraph.Editor,
+            Version=0.0.0.0, Culture=neutral, PublicKeyToken=null

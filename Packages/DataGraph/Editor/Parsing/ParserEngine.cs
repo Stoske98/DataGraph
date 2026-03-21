@@ -71,7 +71,7 @@ namespace DataGraph.Editor.Parsing
                 object key;
                 if (root.KeyType == KeyType.Int)
                 {
-                    if (!int.TryParse(keyRaw.Trim(), out int intKey))
+                    if (!TryParseIntKey(keyRaw.Trim(), out int intKey))
                     {
                         context.AddWarning(
                             $"Cannot parse key '{keyRaw}' as int at row {currentRow}.",
@@ -159,6 +159,26 @@ namespace DataGraph.Editor.Parsing
                     return row;
             }
             return data.RowCount;
+        }
+
+        /// <summary>
+        /// Parses a string as int, tolerating floating-point format (e.g. "1.0" from XLSX).
+        /// </summary>
+        internal static bool TryParseIntKey(string raw, out int result)
+        {
+            if (int.TryParse(raw, System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out result))
+                return true;
+
+            if (double.TryParse(raw, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out double d))
+            {
+                result = (int)d;
+                return true;
+            }
+
+            result = 0;
+            return false;
         }
     }
 }

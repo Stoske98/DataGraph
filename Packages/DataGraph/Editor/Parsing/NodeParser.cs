@@ -175,7 +175,7 @@ namespace DataGraph.Editor.Parsing
                 if (string.IsNullOrEmpty(indexRaw))
                     break;
 
-                if (!int.TryParse(indexRaw.Trim(), out int currentIndex))
+                if (!ParserEngine.TryParseIntKey(indexRaw.Trim(), out int currentIndex))
                     break;
 
                 if (currentIndex < previousIndex)
@@ -220,7 +220,7 @@ namespace DataGraph.Editor.Parsing
                 object key;
                 if (field.KeyType == KeyType.Int)
                 {
-                    if (!int.TryParse(keyRaw.Trim(), out int intKey))
+                    if (!ParserEngine.TryParseIntKey(keyRaw.Trim(), out int intKey))
                         break;
                     key = intKey;
                 }

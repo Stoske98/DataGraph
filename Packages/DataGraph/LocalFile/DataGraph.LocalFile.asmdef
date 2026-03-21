@@ -1,0 +1,19 @@
+{
+    "name": "DataGraph.LocalFile",
+    "rootNamespace": "DataGraph.LocalFile",
+    "references": [
+        "DataGraph.Runtime",
+        "DataGraph.Editor.Public"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

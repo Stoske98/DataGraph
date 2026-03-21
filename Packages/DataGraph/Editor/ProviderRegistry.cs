@@ -5,12 +5,15 @@ namespace DataGraph.Editor
 {
     /// <summary>
     /// Lazily detects available ISheetProvider implementations
-    /// through assembly reflection. GoogleSheets is optional.
+    /// through assembly reflection. Each provider is in its own
+    /// optional assembly.
     /// </summary>
     internal static class ProviderRegistry
     {
         private const string GoogleSheetsTypeName =
             "DataGraph.GoogleSheets.GoogleSheetsProvider, DataGraph.GoogleSheets";
+        private const string LocalFileTypeName =
+            "DataGraph.LocalFile.LocalFileProvider, DataGraph.LocalFile";
 
         /// <summary>
         /// Whether the Google Sheets provider assembly is available.
@@ -29,6 +32,27 @@ namespace DataGraph.Editor
             if (type == null)
                 throw new InvalidOperationException(
                     "Google Sheets provider is not installed.");
+
+            return (ISheetProvider)Activator.CreateInstance(type);
+        }
+
+        /// <summary>
+        /// Whether the Local File provider assembly is available.
+        /// </summary>
+        public static bool IsLocalFileAvailable()
+        {
+            return Type.GetType(LocalFileTypeName) != null;
+        }
+
+        /// <summary>
+        /// Creates the Local File provider instance.
+        /// </summary>
+        public static ISheetProvider CreateLocalFileProvider()
+        {
+            var type = Type.GetType(LocalFileTypeName);
+            if (type == null)
+                throw new InvalidOperationException(
+                    "Local File provider is not installed.");
 
             return (ISheetProvider)Activator.CreateInstance(type);
         }

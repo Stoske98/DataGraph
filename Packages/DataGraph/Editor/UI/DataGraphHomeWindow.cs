@@ -139,9 +139,27 @@ namespace DataGraph.Editor.UI
 
             EditorGUILayout.Space(20);
 
+            if (ProviderRegistry.IsLocalFileAvailable())
+            {
+                if (GUILayout.Button("Local File (CSV / Excel)", GUILayout.Height(28)))
+                {
+                    _currentScreen = Screen.Home;
+                    RefreshGraphList();
+                }
+                EditorGUILayout.LabelField("No setup needed — just set file path on each graph.",
+                    EditorStyles.centeredGreyMiniLabel);
+            }
+            else
+            {
+                EditorGUI.BeginDisabledGroup(true);
+                GUILayout.Button("Local File (CSV / Excel) — not installed", GUILayout.Height(28));
+                EditorGUI.EndDisabledGroup();
+            }
+
+            EditorGUILayout.Space(8);
+
             EditorGUI.BeginDisabledGroup(true);
-            GUILayout.Button("CSV / Excel — Coming in V2", GUILayout.Height(28));
-            GUILayout.Button("OneDrive — Coming in V2", GUILayout.Height(28));
+            GUILayout.Button("OneDrive — Coming soon", GUILayout.Height(28));
             EditorGUI.EndDisabledGroup();
 
             if (IsProviderConfigured())
@@ -309,7 +327,22 @@ namespace DataGraph.Editor.UI
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             EditorGUILayout.LabelField($"Edit: {entry.DisplayName}", EditorStyles.boldLabel);
             _editGraphName = EditorGUILayout.TextField("Graph Name", _editGraphName);
-            _editSheetId = EditorGUILayout.TextField("Sheet ID / URL", _editSheetId);
+
+            EditorGUILayout.BeginHorizontal();
+            _editSheetId = EditorGUILayout.TextField("Data Source", _editSheetId);
+            if (GUILayout.Button("File", EditorStyles.miniButton, GUILayout.Width(35)))
+            {
+                var path = EditorUtility.OpenFilePanel(
+                    "Select Data File", Application.dataPath, "csv,xlsx,tsv");
+                if (!string.IsNullOrEmpty(path))
+                {
+                    if (path.StartsWith(Application.dataPath))
+                        _editSheetId = "Assets" + path.Substring(Application.dataPath.Length);
+                    else
+                        _editSheetId = path;
+                }
+            }
+            EditorGUILayout.EndHorizontal();
             _editSheetName = EditorGUILayout.TextField("Sheet Tab", _editSheetName);
             _editHeaderOffset = EditorGUILayout.IntField("Header Offset", _editHeaderOffset);
 
@@ -651,15 +684,6 @@ namespace DataGraph.Editor.UI
 
             try
             {
-                var provider = ResolveProvider();
-                if (provider == null)
-                {
-                    var g = _console.BeginGroup("(all)");
-                    g.LogError("No provider available. Configure in Settings.");
-                    g.Complete(false);
-                    return;
-                }
-
                 var command = new ParseGraphCommand();
                 var selected = _graphEntries.Where(e => e.Selected).ToList();
                 var tasks = new List<Task>();
@@ -667,6 +691,16 @@ namespace DataGraph.Editor.UI
                 foreach (var entry in selected)
                 {
                     if (_cts.Token.IsCancellationRequested) break;
+
+                    var provider = ResolveProviderForGraph(entry.GraphAsset.SheetId);
+                    if (provider == null)
+                    {
+                        var g = _console.BeginGroup(entry.DisplayName);
+                        g.LogError("No provider available for this data source.");
+                        g.Complete(false);
+                        continue;
+                    }
+
                     var log = _console.BeginGroup(entry.DisplayName);
                     var formats = new ParseGraphCommand.FormatSelection
                     {
@@ -704,15 +738,6 @@ namespace DataGraph.Editor.UI
 
             try
             {
-                var provider = ResolveProvider();
-                if (provider == null)
-                {
-                    var g = _console.BeginGroup("(all)");
-                    g.LogError("No provider available.");
-                    g.Complete(false);
-                    return;
-                }
-
                 var command = new ParseGraphCommand();
                 var selected = _graphEntries.Where(e => e.Selected).ToList();
                 var tasks = new List<Task>();
@@ -720,6 +745,16 @@ namespace DataGraph.Editor.UI
                 foreach (var entry in selected)
                 {
                     if (_cts.Token.IsCancellationRequested) break;
+
+                    var provider = ResolveProviderForGraph(entry.GraphAsset.SheetId);
+                    if (provider == null)
+                    {
+                        var g = _console.BeginGroup(entry.DisplayName + " (SO)");
+                        g.LogError("No provider available for this data source.");
+                        g.Complete(false);
+                        continue;
+                    }
+
                     var log = _console.BeginGroup(entry.DisplayName + " (SO)");
                     tasks.Add(command.CreateSOAssetsAsync(
                         entry.GraphAsset, provider,
@@ -788,16 +823,64 @@ namespace DataGraph.Editor.UI
         private static ISheetProvider ResolveProvider()
         {
             if (ProviderRegistry.IsGoogleSheetsAvailable())
-                return ProviderRegistry.CreateGoogleSheetsProvider();
+            {
+                var gs = ProviderRegistry.CreateGoogleSheetsProvider();
+                if (gs.IsAuthenticated) return gs;
+            }
+
+            if (ProviderRegistry.IsLocalFileAvailable())
+                return ProviderRegistry.CreateLocalFileProvider();
+
             return null;
+        }
+
+        /// <summary>
+        /// Resolves the appropriate provider for a specific graph based on its SheetId.
+        /// File paths use LocalFile, URLs/IDs use Google Sheets.
+        /// </summary>
+        private static ISheetProvider ResolveProviderForGraph(string sheetId)
+        {
+            if (string.IsNullOrEmpty(sheetId))
+                return ResolveProvider();
+
+            if (IsLocalFilePath(sheetId))
+            {
+                if (ProviderRegistry.IsLocalFileAvailable())
+                    return ProviderRegistry.CreateLocalFileProvider();
+            }
+            else
+            {
+                if (ProviderRegistry.IsGoogleSheetsAvailable())
+                {
+                    var gs = ProviderRegistry.CreateGoogleSheetsProvider();
+                    if (gs.IsAuthenticated) return gs;
+                }
+            }
+
+            return ResolveProvider();
+        }
+
+        private static bool IsLocalFilePath(string sheetId)
+        {
+            if (sheetId.StartsWith("Assets/") || sheetId.StartsWith("Assets\\"))
+                return true;
+
+            var ext = System.IO.Path.GetExtension(sheetId)?.ToLowerInvariant();
+            return ext == ".csv" || ext == ".tsv" || ext == ".xlsx";
         }
 
         private static bool IsProviderConfigured()
         {
-            if (!ProviderRegistry.IsGoogleSheetsAvailable())
-                return false;
-            var provider = ProviderRegistry.CreateGoogleSheetsProvider();
-            return provider.IsAuthenticated;
+            if (ProviderRegistry.IsGoogleSheetsAvailable())
+            {
+                var gs = ProviderRegistry.CreateGoogleSheetsProvider();
+                if (gs.IsAuthenticated) return true;
+            }
+
+            if (ProviderRegistry.IsLocalFileAvailable())
+                return true;
+
+            return false;
         }
 
         private void LoadAuthSettings()
