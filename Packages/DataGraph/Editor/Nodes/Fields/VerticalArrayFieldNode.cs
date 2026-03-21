@@ -12,9 +12,9 @@ namespace DataGraph.Editor.Nodes
     [Serializable]
     internal class VerticalArrayFieldNode : Node
     {
-        [SerializeField] private string _fieldName = "items";
-        [SerializeField] private string _typeName = "Element";
-        [SerializeField] private string _indexColumn = "B";
+        [SerializeField] private string _fieldName;
+        [SerializeField] private string _typeName;
+        [SerializeField] private string _indexColumn;
 
         public string FieldName => _fieldName;
         public string TypeName => _typeName;
@@ -22,9 +22,9 @@ namespace DataGraph.Editor.Nodes
 
         protected override void OnDefineOptions(IOptionDefinitionContext context)
         {
-            context.AddOption<string>("FieldName").WithDisplayName("Field Name").WithDefaultValue("items");
-            context.AddOption<string>("TypeName").WithDisplayName("Type Name").WithDefaultValue("Element");
-            context.AddOption<string>("IndexColumn").WithDisplayName("Index Column").WithDefaultValue("B");
+            context.AddOption<string>("FieldName").WithDisplayName("Field Name");
+            context.AddOption<string>("TypeName").WithDisplayName("Type Name");
+            context.AddOption<string>("IndexColumn").WithDisplayName("Index Column");
         }
 
         protected override void OnDefinePorts(IPortDefinitionContext context)

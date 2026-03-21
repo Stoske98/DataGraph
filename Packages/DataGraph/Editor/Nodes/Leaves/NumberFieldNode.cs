@@ -12,8 +12,8 @@ namespace DataGraph.Editor.Nodes
     [Serializable]
     internal class NumberFieldNode : Node
     {
-        [SerializeField] private string _fieldName = "value";
-        [SerializeField] private string _column = "A";
+        [SerializeField] private string _fieldName;
+        [SerializeField] private string _column;
         [SerializeField] private NumberType _numberType = NumberType.Int;
 
         public string FieldName => _fieldName;
@@ -22,8 +22,8 @@ namespace DataGraph.Editor.Nodes
 
         protected override void OnDefineOptions(IOptionDefinitionContext context)
         {
-            context.AddOption<string>("FieldName").WithDisplayName("Field Name").WithDefaultValue("value");
-            context.AddOption<string>("Column").WithDisplayName("Column").WithDefaultValue("A");
+            context.AddOption<string>("FieldName").WithDisplayName("Field Name");
+            context.AddOption<string>("Column").WithDisplayName("Column");
             context.AddOption<NumberType>("NumberType").WithDisplayName("Number Type").WithDefaultValue(NumberType.Int);
         }
 

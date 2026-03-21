@@ -11,7 +11,7 @@ namespace DataGraph.Editor.Nodes
     [Serializable]
     internal class HorizontalArrayFieldNode : Node
     {
-        [SerializeField] private string _fieldName = "tags";
+        [SerializeField] private string _fieldName;
         [SerializeField] private string _separator = ",";
 
         public string FieldName => _fieldName;
@@ -19,7 +19,7 @@ namespace DataGraph.Editor.Nodes
 
         protected override void OnDefineOptions(IOptionDefinitionContext context)
         {
-            context.AddOption<string>("FieldName").WithDisplayName("Field Name").WithDefaultValue("tags");
+            context.AddOption<string>("FieldName").WithDisplayName("Field Name");
             context.AddOption<string>("Separator").WithDisplayName("Separator").WithDefaultValue(",");
         }
 

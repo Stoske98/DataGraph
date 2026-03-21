@@ -11,9 +11,9 @@ namespace DataGraph.Editor.Nodes
     [Serializable]
     internal class DictionaryFieldNode : Node
     {
-        [SerializeField] private string _fieldName = "entries";
-        [SerializeField] private string _typeName = "Entry";
-        [SerializeField] private string _keyColumn = "B";
+        [SerializeField] private string _fieldName;
+        [SerializeField] private string _typeName;
+        [SerializeField] private string _keyColumn;
         [SerializeField] private KeyType _keyType = KeyType.String;
 
         public string FieldName => _fieldName;

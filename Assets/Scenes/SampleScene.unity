@@ -283,7 +283,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: DataGraph.Runtime::DataGraph.Runtime.DatabaseLoader
   _databases:
-  - {fileID: 11400000, guid: d95e6840ecae755448e6daaea108a357, type: 2}
+  - {fileID: 11400000, guid: df215e3d4b80fda4bb75bb7a993e51f8, type: 2}
 --- !u!1 &410087039
 GameObject:
   m_ObjectHideFlags: 0

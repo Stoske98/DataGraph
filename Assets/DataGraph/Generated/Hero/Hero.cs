@@ -13,11 +13,11 @@ namespace DataGraph.Data
     public class Hero : DataGraphEntry
     {
         public string name;
-        public HeroStats stats;
+        public Stat stats;
     }
 
     [Serializable]
-    public class HeroStats
+    public class Stat
     {
         public int hp;
         public int atk;

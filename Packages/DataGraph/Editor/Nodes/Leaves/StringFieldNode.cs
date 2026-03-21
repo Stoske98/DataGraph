@@ -10,16 +10,16 @@ namespace DataGraph.Editor.Nodes
     [Serializable]
     internal class StringFieldNode : Node
     {
-        [SerializeField] private string _fieldName = "text";
-        [SerializeField] private string _column = "A";
+        [SerializeField] private string _fieldName;
+        [SerializeField] private string _column;
 
         public string FieldName => _fieldName;
         public string Column => _column;
 
         protected override void OnDefineOptions(IOptionDefinitionContext context)
         {
-            context.AddOption<string>("FieldName").WithDisplayName("Field Name").WithDefaultValue("text");
-            context.AddOption<string>("Column").WithDisplayName("Column").WithDefaultValue("A");
+            context.AddOption<string>("FieldName").WithDisplayName("Field Name");
+            context.AddOption<string>("Column").WithDisplayName("Column");
         }
 
         protected override void OnDefinePorts(IPortDefinitionContext context)

@@ -11,8 +11,8 @@ namespace DataGraph.Editor.Nodes
     [Serializable]
     internal class Vector2FieldNode : Node
     {
-        [SerializeField] private string _fieldName = "position";
-        [SerializeField] private string _column = "A";
+        [SerializeField] private string _fieldName;
+        [SerializeField] private string _column;
         [SerializeField] private string _separator = ",";
 
         public string FieldName => _fieldName;
@@ -21,8 +21,8 @@ namespace DataGraph.Editor.Nodes
 
         protected override void OnDefineOptions(IOptionDefinitionContext context)
         {
-            context.AddOption<string>("FieldName").WithDisplayName("Field Name").WithDefaultValue("position");
-            context.AddOption<string>("Column").WithDisplayName("Column").WithDefaultValue("A");
+            context.AddOption<string>("FieldName").WithDisplayName("Field Name");
+            context.AddOption<string>("Column").WithDisplayName("Column");
             context.AddOption<string>("Separator").WithDisplayName("Separator").WithDefaultValue(",");
         }
 

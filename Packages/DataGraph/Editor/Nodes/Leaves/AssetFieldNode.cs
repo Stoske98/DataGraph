@@ -11,9 +11,9 @@ namespace DataGraph.Editor.Nodes
     [Serializable]
     internal class AssetFieldNode : Node
     {
-        [SerializeField] private string _fieldName = "asset";
-        [SerializeField] private string _column = "A";
-        [SerializeField] private string _assetTypeName = "Sprite";
+        [SerializeField] private string _fieldName;
+        [SerializeField] private string _column;
+        [SerializeField] private string _assetTypeName;
         [SerializeField] private AssetLoadMethod _loadMethod = AssetLoadMethod.Resources;
 
         public string FieldName => _fieldName;
