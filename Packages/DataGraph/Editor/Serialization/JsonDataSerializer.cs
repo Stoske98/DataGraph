@@ -69,6 +69,9 @@ namespace DataGraph.Editor.Serialization
                 case ParsedValue val:
                     WriteValue(sb, val);
                     break;
+                case ParsedAssetReference assetRef:
+                    WriteJsonString(sb, assetRef.AssetPath ?? "");
+                    break;
             }
         }
 
@@ -122,6 +125,8 @@ namespace DataGraph.Editor.Serialization
             foreach (var child in obj.Children)
             {
                 if (child is ParsedValue pv && pv.Value == null && _nullHandling == NullHandling.Omit)
+                    continue;
+                if (child is ParsedAssetReference ar && string.IsNullOrEmpty(ar.AssetPath) && _nullHandling == NullHandling.Omit)
                     continue;
 
                 if (!first) sb.Append(',');

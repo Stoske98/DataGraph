@@ -4,13 +4,15 @@
     "stats": {
       "hp": 500,
       "atk": 80
-    }
+    },
+    "icon": "Assets/Resources/Heroes/Warrior.png"
   },
   "2": {
     "name": "Mage",
     "stats": {
       "hp": 200,
       "atk": 150
-    }
+    },
+    "icon": "Assets/Resources/Heroes/Mage.png"
   }
 }

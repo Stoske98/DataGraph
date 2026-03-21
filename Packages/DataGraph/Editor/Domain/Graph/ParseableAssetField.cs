@@ -12,12 +12,12 @@ namespace DataGraph.Editor.Domain
         public ParseableAssetField(
             string fieldName,
             string column,
-            string assetTypeName,
+            AssetType assetType,
             AssetLoadMethod loadMethod)
             : base(fieldName, Array.Empty<ParseableNode>())
         {
             Column = column;
-            AssetTypeName = assetTypeName;
+            AssetType = assetType;
             LoadMethod = loadMethod;
         }
 
@@ -27,12 +27,12 @@ namespace DataGraph.Editor.Domain
         public string Column { get; }
 
         /// <summary>
-        /// Name of the Unity asset type (e.g. "Sprite", "AudioClip").
+        /// Unity asset type for this field.
         /// </summary>
-        public string AssetTypeName { get; }
+        public AssetType AssetType { get; }
 
         /// <summary>
-        /// How this asset is loaded at runtime.
+        /// How this asset is resolved — direct reference or addressable string.
         /// </summary>
         public AssetLoadMethod LoadMethod { get; }
     }

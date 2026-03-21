@@ -18,6 +18,8 @@ namespace DataGraph.Editor.Serialization
     /// </summary>
     internal sealed class SODataSerializer
     {
+        private Dictionary<string, UnityEngine.Object> _assetCache;
+
         /// <summary>
         /// Creates the database SO asset at the given path.
         /// Generated C# classes must be compiled before this runs.
@@ -40,6 +42,7 @@ namespace DataGraph.Editor.Serialization
                 if (entryType == null)
                     return Result<string>.Failure($"Type '{entryTypeName}' not found.");
 
+                _assetCache = PreloadAssets(tree.Root);
                 var dbAsset = ScriptableObject.CreateInstance(dbType);
 
                 switch (tree.Root)
@@ -152,6 +155,9 @@ namespace DataGraph.Editor.Serialization
         {
             switch (node)
             {
+                case ParsedAssetReference assetRef:
+                    return ResolveAssetReference(fieldType, assetRef);
+
                 case ParsedValue val:
                     return ConvertValue(fieldType, val.Value);
 
@@ -215,6 +221,69 @@ namespace DataGraph.Editor.Serialization
             catch
             {
                 return targetType.IsValueType ? Activator.CreateInstance(targetType) : null;
+            }
+        }
+
+        /// <summary>
+        /// Resolves an asset reference from the preloaded cache.
+        /// For Addressables, returns the path string directly.
+        /// </summary>
+        private object ResolveAssetReference(Type fieldType, ParsedAssetReference assetRef)
+        {
+            if (string.IsNullOrEmpty(assetRef.AssetPath))
+                return null;
+
+            if (assetRef.LoadMethod == AssetLoadMethod.Addressables)
+                return assetRef.AssetPath;
+
+            _assetCache.TryGetValue(assetRef.AssetPath, out var cached);
+            return cached;
+        }
+
+        /// <summary>
+        /// Collects all unique asset paths from the parsed tree and batch-loads them.
+        /// Each asset is loaded once regardless of how many entries reference it.
+        /// </summary>
+        private static Dictionary<string, UnityEngine.Object> PreloadAssets(ParsedNode root)
+        {
+            var refs = new List<ParsedAssetReference>();
+            CollectAssetRefs(root, refs);
+
+            var cache = new Dictionary<string, UnityEngine.Object>();
+            foreach (var assetRef in refs)
+            {
+                if (string.IsNullOrEmpty(assetRef.AssetPath)) continue;
+                if (assetRef.LoadMethod == AssetLoadMethod.Addressables) continue;
+                if (cache.ContainsKey(assetRef.AssetPath)) continue;
+
+                var loadType = AssetTypeMapper.GetSystemType(assetRef.AssetType);
+                var asset = AssetDatabase.LoadAssetAtPath(assetRef.AssetPath, loadType);
+                if (asset != null)
+                    cache[assetRef.AssetPath] = asset;
+            }
+
+            return cache;
+        }
+
+        private static void CollectAssetRefs(ParsedNode node, List<ParsedAssetReference> refs)
+        {
+            switch (node)
+            {
+                case ParsedAssetReference assetRef:
+                    refs.Add(assetRef);
+                    break;
+                case ParsedObject obj:
+                    foreach (var child in obj.Children)
+                        CollectAssetRefs(child, refs);
+                    break;
+                case ParsedArray arr:
+                    foreach (var element in arr.Elements)
+                        CollectAssetRefs(element, refs);
+                    break;
+                case ParsedDictionary dict:
+                    foreach (var kvp in dict.Entries)
+                        CollectAssetRefs(kvp.Value, refs);
+                    break;
             }
         }
 

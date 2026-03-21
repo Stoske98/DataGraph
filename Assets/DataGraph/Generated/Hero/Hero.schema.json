@@ -12,7 +12,8 @@
           "hp": {"type": "integer"},
           "atk": {"type": "integer"}
         }
-      }
+      },
+      "icon": {"type": "string"}
     }
   }
 }

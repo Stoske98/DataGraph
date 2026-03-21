@@ -14,6 +14,7 @@ namespace DataGraph.Data
     {
         public string name;
         public Stat stats;
+        public Sprite icon;
     }
 
     [Serializable]

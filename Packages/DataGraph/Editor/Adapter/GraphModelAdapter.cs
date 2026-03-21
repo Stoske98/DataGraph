@@ -266,7 +266,7 @@ namespace DataGraph.Editor.Adapter
                 AssetFieldNode => new ParseableAssetField(
                     GetOption<string>(node, "FieldName"),
                     GetColumnOption(node, "Column"),
-                    GetOption<string>(node, "AssetType"),
+                    GetOption<AssetType>(node, "AssetType"),
                     GetOption<AssetLoadMethod>(node, "LoadMethod")),
 
                 CustomFieldNodeBase custom => new ParseableCustomField(

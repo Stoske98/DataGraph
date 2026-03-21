@@ -18,7 +18,9 @@ MonoBehaviour:
     stats:
       hp: 500
       atk: 80
+    icon: {fileID: 21300000, guid: 4a4847f8b7a841d47832c678b9e784b9, type: 3}
   - name: Mage
     stats:
       hp: 200
       atk: 150
+    icon: {fileID: 21300000, guid: 7d3368c37df58f74aafb69b18462abab, type: 3}

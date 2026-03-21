@@ -90,9 +90,13 @@ namespace DataGraph.Editor.Parsing
 
         private ElementParseResult ParseAssetField(ParseableAssetField field, int row)
         {
-            var raw = _context.TableData.GetCell(row, field.Column);
+            var raw = _context.TableData.GetCell(row, field.Column) ?? "";
             return new ElementParseResult(
-                new ParsedValue(field.FieldName, raw, typeof(string)), 1);
+                new ParsedAssetReference(
+                    field.FieldName,
+                    raw.Trim(),
+                    field.AssetType,
+                    field.LoadMethod), 1);
         }
 
         private ElementParseResult ParseObjectField(ParseableObjectField field, int row, int maxRow)

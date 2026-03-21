@@ -48,6 +48,12 @@ namespace DataGraph.Editor.Parsing
                 case ParsedValue val:
                     ValidateValue(val, entries);
                     break;
+                case ParsedAssetReference assetRef:
+                    if (string.IsNullOrEmpty(assetRef.AssetPath))
+                        entries.Add(new ValidationEntry(
+                            ValidationSeverity.Warning,
+                            $"Asset field '{assetRef.FieldName}' has empty path."));
+                    break;
             }
         }
 

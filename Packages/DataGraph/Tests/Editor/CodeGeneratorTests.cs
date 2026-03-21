@@ -206,11 +206,25 @@ namespace DataGraph.Tests.Editor
         }
 
         [Test]
-        public void AssetField_GeneratesTypedField()
+        public void AssetField_Addressables_GeneratesStringField()
         {
             var graph = MakeGraph(new ParseableDictionaryRoot("Item", "A", KeyType.Int, new ParseableNode[]
             {
-                new ParseableAssetField("icon", "B", "Sprite", AssetLoadMethod.Addressables),
+                new ParseableAssetField("icon", "B", AssetType.Sprite, AssetLoadMethod.Addressables),
+            }));
+
+            var result = _gen.GenerateEntries(graph);
+
+            Assert.IsTrue(result.IsSuccess);
+            Assert.IsTrue(result.Value.Contains("public string icon;"));
+        }
+
+        [Test]
+        public void AssetField_AssetDatabase_GeneratesTypedField()
+        {
+            var graph = MakeGraph(new ParseableDictionaryRoot("Item", "A", KeyType.Int, new ParseableNode[]
+            {
+                new ParseableAssetField("icon", "B", AssetType.Sprite, AssetLoadMethod.AssetDatabase),
             }));
 
             var result = _gen.GenerateEntries(graph);

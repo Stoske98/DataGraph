@@ -527,7 +527,7 @@ namespace DataGraph.Tests.Editor
                 .WithGraphName("Items")
                 .WithRoot(new ParseableDictionaryRoot("Item", "A", KeyType.Int, new ParseableNode[]
                 {
-                    new ParseableAssetField("icon", "B", "Sprite", AssetLoadMethod.Addressables),
+                    new ParseableAssetField("icon", "B", AssetType.Sprite, AssetLoadMethod.Addressables),
                 }))
                 .Build();
 
@@ -541,8 +541,8 @@ namespace DataGraph.Tests.Editor
             Assert.IsTrue(result.IsSuccess);
             var dict = (ParsedDictionary)result.Value.Root;
             var item = (ParsedObject)dict.Entries[1];
-            var icon = (ParsedValue)item.Children[0];
-            Assert.AreEqual("sprites/sword_icon", icon.Value);
+            var icon = (ParsedAssetReference)item.Children[0];
+            Assert.AreEqual("sprites/sword_icon", icon.AssetPath);
         }
 
         private static RawTableData MakeTable(string[] headers, params string[][] rows)
