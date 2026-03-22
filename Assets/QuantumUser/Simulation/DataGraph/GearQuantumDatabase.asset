@@ -1,0 +1,45 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 569940962c428284c901cb49dfbb89c3, type: 3}
+  m_Name: GearQuantumDatabase
+  m_EditorClassIdentifier: Quantum.Simulation::DataGraph.Data.GearQuantumDatabase
+  Identifier:
+    Path: QuantumUser/Simulation/DataGraph/GearQuantumDatabase
+    Guid:
+      Value: 425241858369778737
+  entries:
+  - id: 1
+    skills:
+    - skillId: 10
+      levels:
+      - req: 1
+        power: 100
+      - req: 5
+        power: 200
+      - req: 10
+        power: 350
+    - skillId: 11
+      levels:
+      - req: 1
+        power: 80
+      - req: 3
+        power: 150
+    name: Sword
+  - id: 2
+    skills:
+    - skillId: 20
+      levels:
+      - req: 1
+        power: 50
+      - req: 4
+        power: 120
+    name: Shield

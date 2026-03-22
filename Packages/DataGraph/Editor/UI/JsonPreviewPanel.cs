@@ -340,11 +340,48 @@ namespace DataGraph.Editor.UI
             Repaint();
         }
 
-        private static ISheetProvider ResolveProvider()
+        private ISheetProvider ResolveProvider()
         {
+            if (_targetGraph == null)
+                return null;
+
+            var sheetId = _targetGraph.SheetId;
+
+            if (!string.IsNullOrEmpty(sheetId))
+            {
+                if (IsLocalFilePath(sheetId))
+                {
+                    if (ProviderRegistry.IsLocalFileAvailable())
+                        return ProviderRegistry.CreateLocalFileProvider();
+                }
+                else
+                {
+                    if (ProviderRegistry.IsGoogleSheetsAvailable())
+                    {
+                        var gs = ProviderRegistry.CreateGoogleSheetsProvider();
+                        if (gs.IsAuthenticated) return gs;
+                    }
+                }
+            }
+
             if (ProviderRegistry.IsGoogleSheetsAvailable())
-                return ProviderRegistry.CreateGoogleSheetsProvider();
+            {
+                var gs = ProviderRegistry.CreateGoogleSheetsProvider();
+                if (gs.IsAuthenticated) return gs;
+            }
+
+            if (ProviderRegistry.IsLocalFileAvailable())
+                return ProviderRegistry.CreateLocalFileProvider();
+
             return null;
+        }
+
+        private static bool IsLocalFilePath(string sheetId)
+        {
+            if (sheetId.StartsWith("Assets/") || sheetId.StartsWith("Assets\\"))
+                return true;
+            var ext = System.IO.Path.GetExtension(sheetId)?.ToLowerInvariant();
+            return ext == ".csv" || ext == ".tsv" || ext == ".xlsx";
         }
     }
 }

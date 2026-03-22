@@ -674,18 +674,19 @@ namespace DataGraph.Editor.Commands
                 {
                     var field = entryType.GetField(child.FieldName,
                         System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-                    if (field == null)
-                        continue;
+                    if (field == null) continue;
 
                     object value = child switch
                     {
                         Domain.ParsedValue val => ConvertQuantumValue(field.FieldType, val.Value),
                         Domain.ParsedAssetReference assetRef => ConvertQuantumAsset(field.FieldType, assetRef),
                         Domain.ParsedObject childObj => PopulateQuantumEntry(field.FieldType, childObj, null),
+                        Domain.ParsedArray childArr => PopulateQuantumList(field.FieldType, childArr),
+                        Domain.ParsedDictionary childDict => PopulateQuantumDict(field, childDict, instance),
                         _ => null
                     };
 
-                    if (value != null)
+                    if (value != null && child is not Domain.ParsedDictionary)
                         field.SetValue(instance, value);
                 }
             }
@@ -693,10 +694,61 @@ namespace DataGraph.Editor.Commands
             return instance;
         }
 
+        private static object PopulateQuantumList(Type fieldType, Domain.ParsedArray arr)
+        {
+            if (!fieldType.IsGenericType) return null;
+
+            var elementType = fieldType.GetGenericArguments()[0];
+            var list = (System.Collections.IList)Activator.CreateInstance(fieldType);
+
+            foreach (var element in arr.Elements)
+            {
+                object item = element switch
+                {
+                    Domain.ParsedValue val => ConvertQuantumValue(elementType, val.Value),
+                    Domain.ParsedObject obj => PopulateQuantumEntry(elementType, obj, null),
+                    _ => null
+                };
+                if (item != null) list.Add(item);
+            }
+
+            return list;
+        }
+
+        private static object PopulateQuantumDict(System.Reflection.FieldInfo field,
+            Domain.ParsedDictionary dict, object instance)
+        {
+            var entryType = instance.GetType();
+            var keysField = entryType.GetField(field.Name + "Keys");
+            var valuesField = entryType.GetField(field.Name + "Values");
+            if (keysField == null || valuesField == null) return null;
+
+            var keysList = (System.Collections.IList)keysField.GetValue(instance);
+            var valuesList = (System.Collections.IList)valuesField.GetValue(instance);
+            if (keysList == null || valuesList == null) return null;
+
+            var valueElementType = valuesField.FieldType.GetGenericArguments()[0];
+
+            foreach (var kvp in dict.Entries)
+            {
+                var key = ConvertForSource(keysField.FieldType.GetGenericArguments()[0], kvp.Key);
+                if (key != null) keysList.Add(key);
+
+                object value = kvp.Value switch
+                {
+                    Domain.ParsedValue val => ConvertQuantumValue(valueElementType, val.Value),
+                    Domain.ParsedObject obj => PopulateQuantumEntry(valueElementType, obj, null),
+                    _ => null
+                };
+                if (value != null) valuesList.Add(value);
+            }
+
+            return null;
+        }
+
         private static object ConvertQuantumValue(Type targetType, object value)
         {
-            if (value == null)
-                return null;
+            if (value == null) return null;
 
             var typeName = targetType.FullName;
 
@@ -722,8 +774,7 @@ namespace DataGraph.Editor.Commands
                         var x = fromFloat.Invoke(null, new object[] { v2.x });
                         var y = fromFloat.Invoke(null, new object[] { v2.y });
                         var ctor = targetType.GetConstructor(new[] { fpType, fpType });
-                        if (ctor != null)
-                            return ctor.Invoke(new[] { x, y });
+                        if (ctor != null) return ctor.Invoke(new[] { x, y });
                     }
                 }
             }
@@ -742,8 +793,7 @@ namespace DataGraph.Editor.Commands
                         var y = fromFloat.Invoke(null, new object[] { v3.y });
                         var z = fromFloat.Invoke(null, new object[] { v3.z });
                         var ctor = targetType.GetConstructor(new[] { fpType, fpType, fpType });
-                        if (ctor != null)
-                            return ctor.Invoke(new[] { x, y, z });
+                        if (ctor != null) return ctor.Invoke(new[] { x, y, z });
                     }
                 }
             }
@@ -753,10 +803,8 @@ namespace DataGraph.Editor.Commands
 
         private static object ConvertQuantumAsset(Type fieldType, Domain.ParsedAssetReference assetRef)
         {
-            if (string.IsNullOrEmpty(assetRef.AssetPath))
-                return null;
-            if (fieldType == typeof(string))
-                return assetRef.AssetPath;
+            if (string.IsNullOrEmpty(assetRef.AssetPath)) return null;
+            if (fieldType == typeof(string)) return assetRef.AssetPath;
 
             var loadType = Domain.AssetTypeMapper.GetSystemType(assetRef.AssetType);
             return AssetDatabase.LoadAssetAtPath(assetRef.AssetPath, loadType);
@@ -772,8 +820,7 @@ namespace DataGraph.Editor.Commands
                 {
                     var field = sourceType.GetField(child.FieldName,
                         System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-                    if (field == null)
-                        continue;
+                    if (field == null) continue;
 
                     object value = child switch
                     {
@@ -795,8 +842,7 @@ namespace DataGraph.Editor.Commands
         private static Array PopulateSourceArray(Type fieldType, Domain.ParsedArray arr)
         {
             var elementType = fieldType.GetElementType();
-            if (elementType == null)
-                return null;
+            if (elementType == null) return null;
 
             var array = Array.CreateInstance(elementType, arr.Elements.Count);
             for (int i = 0; i < arr.Elements.Count; i++)
@@ -807,31 +853,22 @@ namespace DataGraph.Editor.Commands
                     Domain.ParsedObject obj => PopulateSource(elementType, obj),
                     _ => null
                 };
-                if (element != null)
-                    array.SetValue(element, i);
+                if (element != null) array.SetValue(element, i);
             }
             return array;
         }
 
         private static object ConvertForSource(Type targetType, object value)
         {
-            if (value == null)
-                return targetType == typeof(string) ? "" : null;
-            if (targetType.IsInstanceOfType(value))
-                return value;
-            if (targetType == typeof(string))
-                return value.ToString();
-            if (targetType == typeof(int))
-                return Convert.ToInt32(value);
-            if (targetType == typeof(float))
-                return Convert.ToSingle(value);
-            if (targetType == typeof(double))
-                return Convert.ToDouble(value);
-            if (targetType == typeof(bool))
-                return Convert.ToBoolean(value);
+            if (value == null) return targetType == typeof(string) ? "" : null;
+            if (targetType.IsInstanceOfType(value)) return value;
+            if (targetType == typeof(string)) return value.ToString();
+            if (targetType == typeof(int)) return Convert.ToInt32(value);
+            if (targetType == typeof(float)) return Convert.ToSingle(value);
+            if (targetType == typeof(double)) return Convert.ToDouble(value);
+            if (targetType == typeof(bool)) return Convert.ToBoolean(value);
 
-            try
-            { return Convert.ChangeType(value, targetType, System.Globalization.CultureInfo.InvariantCulture); }
+            try { return Convert.ChangeType(value, targetType, System.Globalization.CultureInfo.InvariantCulture); }
             catch { return targetType.IsValueType ? Activator.CreateInstance(targetType) : null; }
         }
 
@@ -851,8 +888,7 @@ namespace DataGraph.Editor.Commands
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
                 var type = assembly.GetType(typeName);
-                if (type != null)
-                    return type;
+                if (type != null) return type;
             }
             return null;
         }
@@ -882,8 +918,7 @@ namespace DataGraph.Editor.Commands
                 AssetDatabase.CreateAsset(registry, registryPath);
             }
 
-            if (registry == null)
-                return;
+            if (registry == null) return;
 
             action(registry);
             registry.CleanUp();

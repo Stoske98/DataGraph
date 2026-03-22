@@ -163,7 +163,7 @@ MonoBehaviour:
     - rid: 6162499193984778338
       type: {class: DataGraphAsset, ns: DataGraph.Editor.Nodes, asm: DataGraph.Editor}
       data:
-        _sheetId: C:/Users/Joca/Downloads/DataGraph.xlsx
+        _sheetId: C:/Users/Joca/Downloads/DataGraph - Nested.tsv
         _sheetName: Nested
         _headerRowOffset: 1
         _graphName: Hero

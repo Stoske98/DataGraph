@@ -56,15 +56,23 @@ namespace DataGraph.Editor.CodeGen
         private void WriteEntryClasses(CodeWriter w, ParseableNode root)
         {
             var typeName = GetTypeName(root);
-            WriteEntryClass(w, typeName, root.Children);
+            var keyInfo = root is ParseableDictionaryRoot dict ? dict : null;
+            WriteEntryClass(w, typeName, root.Children, keyInfo);
         }
 
-        private void WriteEntryClass(CodeWriter w, string typeName, IReadOnlyList<ParseableNode> children)
+        private void WriteEntryClass(CodeWriter w, string typeName, IReadOnlyList<ParseableNode> children,
+            ParseableDictionaryRoot keyInfo = null)
         {
             var entryName = typeName + "QuantumEntry";
 
             w.Line("[Serializable]");
             w.BeginBlock($"public class {entryName}");
+
+            if (keyInfo != null)
+            {
+                var keyType = TypeMapper.GetKeyTypeName(keyInfo.KeyType);
+                w.Line($"public {keyType} id;");
+            }
 
             bool hasViewFields = false;
 
@@ -125,7 +133,7 @@ namespace DataGraph.Editor.CodeGen
                     w.Line($"public {GetQuantumViewType(custom.ValueType)} {custom.FieldName};");
                     break;
                 case ParseableAssetField asset:
-                    w.Line($"public {AssetTypeMapper.GetCSharpTypeName(asset.AssetType)} {asset.FieldName};");
+                    w.Line($"public UnityEngine.{AssetTypeMapper.GetCSharpTypeName(asset.AssetType)} {asset.FieldName};");
                     break;
             }
         }

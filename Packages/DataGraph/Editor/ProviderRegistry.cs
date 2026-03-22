@@ -72,7 +72,7 @@ namespace DataGraph.Editor
         /// </summary>
         public static bool IsQuantumAvailable()
         {
-            return Type.GetType("Quantum.AssetObject, Quantum.Simulation") != null;
+            return Type.GetType("Quantum.AssetObject, Quantum.Engine") != null;
         }
     }
 }
