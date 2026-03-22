@@ -35,6 +35,7 @@ namespace DataGraph.Editor.Commands
             public bool GenerateSO { get; set; }
             public bool GenerateJSON { get; set; }
             public bool GenerateBlob { get; set; }
+            public bool GenerateQuantum { get; set; }
         }
 
         /// <summary>
@@ -178,6 +179,27 @@ namespace DataGraph.Editor.Commands
                     }
                     generatedFiles.AddRange(blobGenResult.Value);
                     log.LogInfo($"Generate: Blob/{graphName}Blob.cs + Blob/{graphName}BlobDatabase.cs + Blob/{graphName}BlobBuilder.cs");
+                }
+
+                // 5c. Generate Quantum AssetObject (if Quantum)
+                if (formats.GenerateQuantum)
+                {
+                    log.LogInfo("Generate: creating Quantum AssetObject classes...");
+                    var quantumGen = new CodeGen.QuantumCodeGenerator();
+                    var quantumResult = quantumGen.Generate(graph);
+                    if (quantumResult.IsFailure)
+                    {
+                        log.LogError($"Quantum generate failed: {quantumResult.Error}");
+                        log.Complete(false);
+                        return false;
+                    }
+
+                    var quantumPath = "Assets/QuantumUser/Simulation/DataGraph";
+                    var quantumCsPath = Path.Combine(quantumPath, $"{graphName}QuantumDatabase.cs");
+                    EnsureDirectory(quantumCsPath);
+                    File.WriteAllText(quantumCsPath, quantumResult.Value);
+                    generatedFiles.Add(quantumCsPath);
+                    log.LogInfo($"Generate: QuantumUser/Simulation/DataGraph/{graphName}QuantumDatabase.cs");
                 }
 
                 // 6. Serialize JSON
@@ -497,6 +519,247 @@ namespace DataGraph.Editor.Commands
                 log.Complete(false);
                 return false;
             }
+        }
+
+        /// <summary>
+        /// Creates a Quantum AssetObject .asset file by populating
+        /// the generated database class with FP-converted data.
+        /// </summary>
+        public async Task<bool> CreateQuantumAssetsAsync(
+            DataGraphAsset graphAsset,
+            ISheetProvider provider,
+            string outputBasePath,
+            GraphLogGroup log,
+            CancellationToken cancellationToken = default)
+        {
+            var graphName = !string.IsNullOrEmpty(graphAsset.GraphName)
+                ? graphAsset.GraphName
+                : graphAsset.name;
+
+            try
+            {
+                log.LogInfo("Adapt: reading graph structure...");
+                var adaptResult = _adapter.ReadGraph(graphAsset);
+                if (adaptResult.IsFailure)
+                {
+                    log.LogError($"Adapt failed: {adaptResult.Error}");
+                    log.Complete(false);
+                    return false;
+                }
+
+                var graph = adaptResult.Value;
+
+                log.LogInfo("Fetch: requesting data from source...");
+                var sheetRef = new SheetReference(
+                    graph.SheetId, graph.HeaderRowOffset, graph.SheetName);
+                var fetchResult = await provider.FetchAsync(sheetRef, cancellationToken);
+                if (fetchResult.IsFailure)
+                {
+                    log.LogError($"Fetch failed: {fetchResult.Error}");
+                    log.Complete(false);
+                    return false;
+                }
+
+                log.LogInfo("Parse: processing table data...");
+                var parseResult = _parserEngine.Parse(fetchResult.Value, graph);
+                if (parseResult.IsFailure)
+                {
+                    log.LogError($"Parse failed: {parseResult.Error}");
+                    log.Complete(false);
+                    return false;
+                }
+
+                log.LogInfo("Serialize: creating Quantum asset...");
+                var dbTypeName = $"DataGraph.Data.{graphName}QuantumDatabase";
+                var dbType = FindType(dbTypeName);
+                if (dbType == null)
+                {
+                    log.LogError($"Type '{dbTypeName}' not found. Run Parse with Quantum enabled first.");
+                    log.Complete(false);
+                    return false;
+                }
+
+                var entryTypeName = $"DataGraph.Data.{GetRootTypeName(graph.Root)}QuantumEntry";
+                var entryType = FindType(entryTypeName);
+                if (entryType == null)
+                {
+                    log.LogError($"Type '{entryTypeName}' not found.");
+                    log.Complete(false);
+                    return false;
+                }
+
+                var dbAsset = UnityEngine.ScriptableObject.CreateInstance(dbType);
+                var entriesField = dbType.GetField("entries");
+                if (entriesField == null)
+                {
+                    log.LogError("'entries' field not found on Quantum database.");
+                    log.Complete(false);
+                    return false;
+                }
+
+                var entriesList = entriesField.GetValue(dbAsset) as System.Collections.IList;
+                if (entriesList == null)
+                {
+                    log.LogError("'entries' field is not a list.");
+                    log.Complete(false);
+                    return false;
+                }
+
+                switch (parseResult.Value.Root)
+                {
+                    case Domain.ParsedDictionary dict:
+                        foreach (var kvp in dict.Entries)
+                        {
+                            var entry = PopulateQuantumEntry(entryType, kvp.Value, kvp.Key);
+                            entriesList.Add(entry);
+                        }
+                        break;
+                    case Domain.ParsedArray arr:
+                        foreach (var element in arr.Elements)
+                        {
+                            var entry = PopulateQuantumEntry(entryType, element, null);
+                            entriesList.Add(entry);
+                        }
+                        break;
+                    case Domain.ParsedObject obj:
+                        var singleEntry = PopulateQuantumEntry(entryType, obj, null);
+                        entriesList.Add(singleEntry);
+                        break;
+                }
+
+                var quantumOutputPath = "Assets/QuantumUser/Simulation/DataGraph";
+                var assetPath = Path.Combine(quantumOutputPath, $"{graphName}QuantumDatabase.asset");
+                EnsureDirectory(assetPath);
+
+                var existing = AssetDatabase.LoadAssetAtPath<UnityEngine.ScriptableObject>(assetPath);
+                if (existing != null)
+                    AssetDatabase.DeleteAsset(assetPath);
+
+                AssetDatabase.CreateAsset(dbAsset, assetPath);
+                AssetDatabase.SaveAssets();
+                AssetDatabase.Refresh();
+
+                log.LogSuccess($"Done: Quantum asset created at {assetPath}");
+                log.Complete(true);
+                return true;
+            }
+            catch (OperationCanceledException)
+            {
+                log.LogWarning("Cancelled by user");
+                log.Complete(false);
+                return false;
+            }
+            catch (Exception ex)
+            {
+                log.LogError($"Unexpected error: {ex.Message}");
+                log.Complete(false);
+                return false;
+            }
+        }
+
+        private static object PopulateQuantumEntry(Type entryType, Domain.ParsedNode node, object key)
+        {
+            var instance = Activator.CreateInstance(entryType);
+
+            if (key != null)
+            {
+                var idField = entryType.GetField("id");
+                if (idField != null)
+                    idField.SetValue(instance, ConvertForSource(idField.FieldType, key));
+            }
+
+            if (node is Domain.ParsedObject obj)
+            {
+                foreach (var child in obj.Children)
+                {
+                    var field = entryType.GetField(child.FieldName,
+                        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                    if (field == null)
+                        continue;
+
+                    object value = child switch
+                    {
+                        Domain.ParsedValue val => ConvertQuantumValue(field.FieldType, val.Value),
+                        Domain.ParsedAssetReference assetRef => ConvertQuantumAsset(field.FieldType, assetRef),
+                        Domain.ParsedObject childObj => PopulateQuantumEntry(field.FieldType, childObj, null),
+                        _ => null
+                    };
+
+                    if (value != null)
+                        field.SetValue(instance, value);
+                }
+            }
+
+            return instance;
+        }
+
+        private static object ConvertQuantumValue(Type targetType, object value)
+        {
+            if (value == null)
+                return null;
+
+            var typeName = targetType.FullName;
+
+            if (typeName == "Photon.Deterministic.FP")
+            {
+                var fromFloat = targetType.GetMethod("FromFloat_UNSAFE",
+                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static,
+                    null, new[] { typeof(float) }, null);
+                if (fromFloat != null)
+                    return fromFloat.Invoke(null, new object[] { Convert.ToSingle(value) });
+            }
+
+            if (typeName == "Photon.Deterministic.FPVector2")
+            {
+                if (value is UnityEngine.Vector2 v2)
+                {
+                    var fpType = FindType("Photon.Deterministic.FP");
+                    var fromFloat = fpType?.GetMethod("FromFloat_UNSAFE",
+                        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static,
+                        null, new[] { typeof(float) }, null);
+                    if (fromFloat != null)
+                    {
+                        var x = fromFloat.Invoke(null, new object[] { v2.x });
+                        var y = fromFloat.Invoke(null, new object[] { v2.y });
+                        var ctor = targetType.GetConstructor(new[] { fpType, fpType });
+                        if (ctor != null)
+                            return ctor.Invoke(new[] { x, y });
+                    }
+                }
+            }
+
+            if (typeName == "Photon.Deterministic.FPVector3")
+            {
+                if (value is UnityEngine.Vector3 v3)
+                {
+                    var fpType = FindType("Photon.Deterministic.FP");
+                    var fromFloat = fpType?.GetMethod("FromFloat_UNSAFE",
+                        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static,
+                        null, new[] { typeof(float) }, null);
+                    if (fromFloat != null)
+                    {
+                        var x = fromFloat.Invoke(null, new object[] { v3.x });
+                        var y = fromFloat.Invoke(null, new object[] { v3.y });
+                        var z = fromFloat.Invoke(null, new object[] { v3.z });
+                        var ctor = targetType.GetConstructor(new[] { fpType, fpType, fpType });
+                        if (ctor != null)
+                            return ctor.Invoke(new[] { x, y, z });
+                    }
+                }
+            }
+
+            return ConvertForSource(targetType, value);
+        }
+
+        private static object ConvertQuantumAsset(Type fieldType, Domain.ParsedAssetReference assetRef)
+        {
+            if (string.IsNullOrEmpty(assetRef.AssetPath))
+                return null;
+            if (fieldType == typeof(string))
+                return assetRef.AssetPath;
+
+            var loadType = Domain.AssetTypeMapper.GetSystemType(assetRef.AssetType);
+            return AssetDatabase.LoadAssetAtPath(assetRef.AssetPath, loadType);
         }
 
         private static object PopulateSource(Type sourceType, Domain.ParsedNode node)

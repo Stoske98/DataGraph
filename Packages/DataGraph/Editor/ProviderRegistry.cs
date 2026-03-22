@@ -66,5 +66,13 @@ namespace DataGraph.Editor
         {
             return Type.GetType("Unity.Entities.BlobBuilder, Unity.Entities") != null;
         }
+
+        /// <summary>
+        /// Whether Quantum output is available (requires Photon Quantum SDK).
+        /// </summary>
+        public static bool IsQuantumAvailable()
+        {
+            return Type.GetType("Quantum.AssetObject, Quantum.Simulation") != null;
+        }
     }
 }

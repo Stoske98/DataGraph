@@ -271,6 +271,7 @@ namespace DataGraph.Editor.UI
             }
 
             var blobAvailable = ProviderRegistry.IsBlobAvailable();
+            var quantumAvailable = ProviderRegistry.IsQuantumAvailable();
 
             EditorGUILayout.BeginHorizontal(EditorStyles.toolbar);
             EditorGUILayout.LabelField("", GUILayout.Width(20));
@@ -280,6 +281,8 @@ namespace DataGraph.Editor.UI
             EditorGUILayout.LabelField("JSON", EditorStyles.miniLabel, GUILayout.Width(32));
             if (blobAvailable)
                 EditorGUILayout.LabelField("Blob", EditorStyles.miniLabel, GUILayout.Width(30));
+            if (quantumAvailable)
+                EditorGUILayout.LabelField("QSO", EditorStyles.miniLabel, GUILayout.Width(30));
             EditorGUILayout.LabelField("", GUILayout.Width(30));
             EditorGUILayout.EndHorizontal();
 
@@ -312,6 +315,8 @@ namespace DataGraph.Editor.UI
                 entry.GenerateJSON = EditorGUILayout.Toggle(entry.GenerateJSON, GUILayout.Width(32));
                 if (blobAvailable)
                     entry.GenerateBlob = EditorGUILayout.Toggle(entry.GenerateBlob, GUILayout.Width(30));
+                if (quantumAvailable)
+                    entry.GenerateQuantum = EditorGUILayout.Toggle(entry.GenerateQuantum, GUILayout.Width(30));
 
                 if (GUILayout.Button("...", EditorStyles.miniButton, GUILayout.Width(25)))
                 {
@@ -712,7 +717,8 @@ namespace DataGraph.Editor.UI
                     {
                         GenerateSO = entry.GenerateSO,
                         GenerateJSON = entry.GenerateJSON,
-                        GenerateBlob = entry.GenerateBlob
+                        GenerateBlob = entry.GenerateBlob,
+                        GenerateQuantum = entry.GenerateQuantum
                     };
                     tasks.Add(command.ExecuteAsync(
                         entry.GraphAsset, provider, formats,
@@ -753,7 +759,7 @@ namespace DataGraph.Editor.UI
                 {
                     if (_cts.Token.IsCancellationRequested) break;
 
-                    if (!entry.GenerateSO && !entry.GenerateBlob)
+                    if (!entry.GenerateSO && !entry.GenerateBlob && !entry.GenerateQuantum)
                         continue;
 
                     var provider = ResolveProviderForGraph(entry.GraphAsset.SheetId);
@@ -780,6 +786,14 @@ namespace DataGraph.Editor.UI
                             entry.GraphAsset, provider,
                             _outputPath, log, _cts.Token));
                     }
+
+                    if (entry.GenerateQuantum)
+                    {
+                        var log = _console.BeginGroup(entry.DisplayName + " (Quantum)");
+                        tasks.Add(command.CreateQuantumAssetsAsync(
+                            entry.GraphAsset, provider,
+                            _outputPath, log, _cts.Token));
+                    }
                 }
 
                 await Task.WhenAll(tasks);
@@ -803,9 +817,9 @@ namespace DataGraph.Editor.UI
 
         private void RefreshGraphList()
         {
-            var previousSelection = new Dictionary<string, (bool selected, bool so, bool json, bool blob)>();
+            var previousSelection = new Dictionary<string, (bool selected, bool so, bool json, bool blob, bool quantum)>();
             foreach (var e in _graphEntries)
-                previousSelection[e.AssetPath] = (e.Selected, e.GenerateSO, e.GenerateJSON, e.GenerateBlob);
+                previousSelection[e.AssetPath] = (e.Selected, e.GenerateSO, e.GenerateJSON, e.GenerateBlob, e.GenerateQuantum);
 
             _graphEntries.Clear();
             var guids = AssetDatabase.FindAssets("");
@@ -827,7 +841,8 @@ namespace DataGraph.Editor.UI
                     Selected = false,
                     GenerateSO = true,
                     GenerateJSON = true,
-                    GenerateBlob = false
+                    GenerateBlob = false,
+                    GenerateQuantum = false
                 };
 
                 if (previousSelection.TryGetValue(path, out var prev))
@@ -836,6 +851,7 @@ namespace DataGraph.Editor.UI
                     entry.GenerateSO = prev.so;
                     entry.GenerateJSON = prev.json;
                     entry.GenerateBlob = prev.blob;
+                    entry.GenerateQuantum = prev.quantum;
                 }
 
                 _graphEntries.Add(entry);
@@ -1016,6 +1032,7 @@ namespace DataGraph.Editor.UI
             public bool GenerateSO;
             public bool GenerateJSON;
             public bool GenerateBlob;
+            public bool GenerateQuantum;
         }
     }
 }
