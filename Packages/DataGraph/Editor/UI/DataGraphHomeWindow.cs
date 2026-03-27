@@ -691,12 +691,9 @@ namespace DataGraph.Editor.UI
             if (AssetDatabase.IsValidFolder(generatedFolder))
                 AssetDatabase.DeleteAsset(generatedFolder);
 
-            var quantumCs = $"Assets/QuantumUser/Simulation/DataGraph/{graphName}QuantumDatabase.cs";
-            if (System.IO.File.Exists(quantumCs))
-                AssetDatabase.DeleteAsset(quantumCs);
-            var quantumAsset = $"Assets/QuantumUser/Simulation/DataGraph/{graphName}QuantumDatabase.asset";
-            if (System.IO.File.Exists(quantumAsset))
-                AssetDatabase.DeleteAsset(quantumAsset);
+            var quantumFolder = $"Assets/QuantumUser/Simulation/DataGraph/{graphName}";
+            if (AssetDatabase.IsValidFolder(quantumFolder))
+                AssetDatabase.DeleteAsset(quantumFolder);
 
             AssetDatabase.DeleteAsset(entry.AssetPath);
             AssetDatabase.Refresh();
