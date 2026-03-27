@@ -30,7 +30,7 @@ namespace DataGraph.Editor.UI
         private string _graphsPath = "Assets/DataGraph/Graphs";
         private bool _isRunning;
         private float _splitRatio = 0.55f;
-        private DataGraphConsole _console = new();
+        [SerializeField] private DataGraphConsole _console = new();
         private CancellationTokenSource _cts;
         private bool _showSettings;
 
@@ -580,7 +580,17 @@ namespace DataGraph.Editor.UI
                 _ => "[Info]"
             };
 
-            EditorGUILayout.BeginHorizontal();
+            var rect = EditorGUILayout.BeginHorizontal();
+
+            if (Event.current.type == EventType.MouseDown &&
+                rect.Contains(Event.current.mousePosition))
+            {
+                EditorGUIUtility.systemCopyBuffer = entry.Message;
+                Debug.Log($"[DataGraph] Copied: {entry.Message}");
+                Event.current.Use();
+            }
+
+            EditorGUIUtility.AddCursorRect(rect, MouseCursor.Text);
             EditorGUILayout.LabelField(entry.Timestamp.ToString("HH:mm:ss"),
                 EditorStyles.miniLabel, GUILayout.Width(52));
             var prev = GUI.contentColor;
@@ -680,6 +690,10 @@ namespace DataGraph.Editor.UI
             var generatedFolder = Path.Combine(_outputPath, graphName);
             if (AssetDatabase.IsValidFolder(generatedFolder))
                 AssetDatabase.DeleteAsset(generatedFolder);
+
+            var quantumFolder = $"Assets/QuantumUser/Simulation/DataGraph/{graphName}";
+            if (AssetDatabase.IsValidFolder(quantumFolder))
+                AssetDatabase.DeleteAsset(quantumFolder);
 
             AssetDatabase.DeleteAsset(entry.AssetPath);
             AssetDatabase.Refresh();

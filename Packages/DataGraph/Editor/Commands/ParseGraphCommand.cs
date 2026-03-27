@@ -194,12 +194,12 @@ namespace DataGraph.Editor.Commands
                         return false;
                     }
 
-                    var quantumPath = "Assets/QuantumUser/Simulation/DataGraph";
+                    var quantumPath = $"Assets/QuantumUser/Simulation/DataGraph/{graphName}";
                     var quantumCsPath = Path.Combine(quantumPath, $"{graphName}QuantumDatabase.cs");
                     EnsureDirectory(quantumCsPath);
                     File.WriteAllText(quantumCsPath, quantumResult.Value);
                     generatedFiles.Add(quantumCsPath);
-                    log.LogInfo($"Generate: QuantumUser/Simulation/DataGraph/{graphName}QuantumDatabase.cs");
+                    log.LogInfo($"Generate: QuantumUser/Simulation/DataGraph/{graphName}/{graphName}QuantumDatabase.cs");
                 }
 
                 // 6. Serialize JSON
@@ -627,7 +627,7 @@ namespace DataGraph.Editor.Commands
                         break;
                 }
 
-                var quantumOutputPath = "Assets/QuantumUser/Simulation/DataGraph";
+                var quantumOutputPath = $"Assets/QuantumUser/Simulation/DataGraph/{graphName}";
                 var assetPath = Path.Combine(quantumOutputPath, $"{graphName}QuantumDatabase.asset");
                 EnsureDirectory(assetPath);
 
