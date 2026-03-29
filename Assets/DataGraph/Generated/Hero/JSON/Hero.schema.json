@@ -6,14 +6,14 @@
     "type": "object",
     "properties": {
       "name": {"type": "string"},
-      "stats": {
+      "stat": {
         "type": "object",
         "properties": {
           "hp": {"type": "integer"},
-          "atk": {"type": "integer"}
+          "attack": {"type": "integer"}
         }
       },
-      "icon": {"type": "string"}
+      "sprite": {"type": "string"}
     }
   }
 }

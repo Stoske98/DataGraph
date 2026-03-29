@@ -1,18 +1,18 @@
 {
   "1": {
     "name": "Warrior",
-    "stats": {
+    "stat": {
       "hp": 500,
-      "atk": 80
+      "attack": 80
     },
-    "icon": "Assets/Resources/Heroes/Warrior.png"
+    "sprite": "Assets/Resources/Heroes/Warrior.png"
   },
   "2": {
     "name": "Mage",
-    "stats": {
+    "stat": {
       "hp": 200,
-      "atk": 150
+      "attack": 150
     },
-    "icon": "Assets/Resources/Heroes/Mage.png"
+    "sprite": "Assets/Resources/Heroes/Mage.png"
   }
 }

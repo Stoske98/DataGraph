@@ -1,98 +1,93 @@
 using System.Collections.Generic;
-using Unity.GraphToolkit.Editor;
-using DataGraph.Editor.Nodes;
 
 namespace DataGraph.Editor.Adapter
 {
     /// <summary>
-    /// Validates DataGraph structure and reports issues through
-    /// GTK GraphLogger for real-time error display on nodes.
-    /// Called from DataGraphAsset.OnGraphChanged.
+    /// Validates DataGraph structure and reports issues.
+    /// Checks root count, connectivity, and column validity.
     /// </summary>
     internal sealed class GraphValidator
     {
-        private readonly GraphLogger _logger;
-
-        public GraphValidator(GraphLogger logger)
+        public sealed class ValidationResult
         {
-            _logger = logger;
+            private readonly List<string> _errors = new();
+            private readonly List<string> _warnings = new();
+
+            public IReadOnlyList<string> Errors => _errors;
+            public IReadOnlyList<string> Warnings => _warnings;
+            public bool IsValid => _errors.Count == 0;
+
+            public void AddError(string message) => _errors.Add(message);
+            public void AddWarning(string message) => _warnings.Add(message);
         }
 
-        /// <summary>
-        /// Runs all structural and semantic validation rules on the graph.
-        /// </summary>
-        public void Validate(DataGraphAsset graph)
+        public ValidationResult Validate(DataGraphAsset graph)
         {
-            ValidateExactlyOneRoot(graph);
-            ValidateAllNodesConnected(graph);
+            var result = new ValidationResult();
+            ValidateRootNode(graph, result);
+            ValidateConnectivity(graph, result);
+            ValidateColumns(graph, result);
+            return result;
         }
 
-        private void ValidateExactlyOneRoot(DataGraphAsset graph)
+        private static void ValidateRootNode(DataGraphAsset graph, ValidationResult result)
         {
             int rootCount = 0;
-            for (int i = 0; i < graph.nodeCount; i++)
-            {
-                var inode = graph.GetNode(i);
-                if (inode is DictionaryRootNode or ArrayRootNode or ObjectRootNode)
+            foreach (var node in graph.Nodes)
+                if (NodeTypeRegistry.IsRootNode(node.TypeName))
                     rootCount++;
-            }
 
             if (rootCount == 0)
-            {
-                _logger.LogError("Graph must have exactly one Root node.");
-            }
+                result.AddError("Graph must have exactly one Root node.");
             else if (rootCount > 1)
-            {
-                _logger.LogError($"Graph must have exactly one Root node, but found {rootCount}.");
-            }
+                result.AddError($"Graph has {rootCount} root nodes — must have exactly one.");
         }
 
-        private void ValidateAllNodesConnected(DataGraphAsset graph)
+        private static void ValidateConnectivity(DataGraphAsset graph, ValidationResult result)
         {
-            var connectedPorts = new List<IPort>();
+            var connectedInputs = new HashSet<string>();
+            foreach (var edge in graph.Edges)
+                connectedInputs.Add(edge.InputNodeGuid);
 
-            for (int i = 0; i < graph.nodeCount; i++)
+            foreach (var node in graph.Nodes)
             {
-                var inode = graph.GetNode(i);
-                if (inode is not Node node) continue;
-                if (node is DictionaryRootNode or ArrayRootNode or ObjectRootNode)
-                    continue;
-
-                var parentPort = node.GetInputPortByName("Parent");
-                if (parentPort == null) continue;
-
-                connectedPorts.Clear();
-                parentPort.GetConnectedPorts(connectedPorts);
-
-                if (connectedPorts.Count == 0)
+                if (NodeTypeRegistry.IsRootNode(node.TypeName)) continue;
+                if (!connectedInputs.Contains(node.Guid))
                 {
-                    _logger.LogWarning(
-                        $"Node '{GetNodeDisplayName(node)}' is not connected to a parent.",
-                        node);
+                    var name = node.GetProperty("FieldName", node.TypeName);
+                    result.AddWarning($"Node '{name}' is not connected to a parent.");
                 }
             }
         }
 
-        private static string GetNodeDisplayName(Node node)
+        private static void ValidateColumns(DataGraphAsset graph, ValidationResult result)
         {
-            return node switch
+            if (graph.CachedHeaders.Count == 0) return;
+
+            var validHeaders = new HashSet<string>();
+            foreach (var h in graph.CachedHeaders) validHeaders.Add(h);
+            for (int i = 0; i < 26; i++) validHeaders.Add(((char)('A' + i)).ToString());
+
+            foreach (var node in graph.Nodes)
             {
-                StringFieldNode sf => sf.FieldName,
-                NumberFieldNode nf => nf.FieldName,
-                BoolFieldNode bf => bf.FieldName,
-                Vector2FieldNode v2f => v2f.FieldName,
-                Vector3FieldNode v3f => v3f.FieldName,
-                ColorFieldNode clf => clf.FieldName,
-                AssetFieldNode af => af.FieldName,
-                ObjectFieldNode of => of.FieldName,
-                VerticalArrayFieldNode vaf => vaf.FieldName,
-                HorizontalArrayFieldNode haf => haf.FieldName,
-                DictionaryFieldNode df => df.FieldName,
-                DictionaryRootNode dr => dr.TypeName,
-                ArrayRootNode ar => ar.TypeName,
-                ObjectRootNode or2 => or2.TypeName,
-                _ => node.GetType().Name
-            };
+                CheckColumn(node, "Column", validHeaders, result);
+                CheckColumn(node, "KeyColumn", validHeaders, result);
+                CheckColumn(node, "IndexColumn", validHeaders, result);
+                CheckColumn(node, "NameColumn", validHeaders, result);
+                CheckColumn(node, "ValueColumn", validHeaders, result);
+            }
+        }
+
+        private static void CheckColumn(SerializedNode node, string propKey,
+            HashSet<string> valid, ValidationResult result)
+        {
+            var value = node.GetProperty(propKey, null);
+            if (value == null) return;
+            if (!valid.Contains(value))
+            {
+                var name = node.GetProperty("FieldName", node.GetProperty("TypeName", node.TypeName));
+                result.AddWarning($"Node '{name}': column '{value}' not found in sheet headers.");
+            }
         }
     }
 }

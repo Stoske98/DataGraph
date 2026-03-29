@@ -1,0 +1,101 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 078ea1d5631c38f479ac166f80c4ad04, type: 3}
+  m_Name: Hero
+  m_EditorClassIdentifier: DataGraph.Editor::DataGraph.Editor.DataGraphAsset
+  _graphName: Hero
+  _sheetId: C:/Users/Joca/Downloads/DataGraph - Nested.tsv
+  _sheetName: Nested
+  _headerRowOffset: 1
+  _graphType: 0
+  _nodes:
+  - _guid: 942d3971-0963-43e3-9387-d2aaa291c493
+    _typeName: DictionaryRoot
+    _position: {x: -454, y: -720.6667}
+    _properties:
+    - _key: TypeName
+      _value: Hero
+    - _key: KeyColumn
+      _value: A
+    - _key: KeyType
+      _value: Int
+  - _guid: f32db3d4-c301-4e3c-b02b-8d52a41dd81a
+    _typeName: StringField
+    _position: {x: -168.00002, y: -740}
+    _properties:
+    - _key: FieldName
+      _value: name
+    - _key: Column
+      _value: B
+  - _guid: ac605f88-d016-405c-89e9-eb9b2f8874f8
+    _typeName: ObjectField
+    _position: {x: -165.33334, y: -890.6667}
+    _properties:
+    - _key: TypeName
+      _value: Stat
+    - _key: FieldName
+      _value: stat
+  - _guid: 2a5f7bc7-46c3-4bb2-9f22-6f1f45169d5d
+    _typeName: NumberField
+    _position: {x: 185.33331, y: -965.3333}
+    _properties:
+    - _key: FieldName
+      _value: hp
+    - _key: Column
+      _value: C
+    - _key: NumberType
+      _value: Int
+  - _guid: 144a23a4-4240-4bbe-ad8b-335a0143f51a
+    _typeName: NumberField
+    _position: {x: 183.33331, y: -803.3333}
+    _properties:
+    - _key: FieldName
+      _value: attack
+    - _key: Column
+      _value: D
+    - _key: NumberType
+      _value: Int
+  - _guid: 8a40cd60-7385-4c15-8465-70955412a2ca
+    _typeName: AssetField
+    _position: {x: -174.66667, y: -576.6667}
+    _properties:
+    - _key: FieldName
+      _value: sprite
+    - _key: Column
+      _value: E
+    - _key: AssetType
+      _value: Sprite
+    - _key: LoadMethod
+      _value: AssetDatabase
+  _edges:
+  - _outputNodeGuid: ac605f88-d016-405c-89e9-eb9b2f8874f8
+    _outputPortName: Children
+    _inputNodeGuid: 2a5f7bc7-46c3-4bb2-9f22-6f1f45169d5d
+    _inputPortName: Parent
+  - _outputNodeGuid: ac605f88-d016-405c-89e9-eb9b2f8874f8
+    _outputPortName: Children
+    _inputNodeGuid: 144a23a4-4240-4bbe-ad8b-335a0143f51a
+    _inputPortName: Parent
+  - _outputNodeGuid: 942d3971-0963-43e3-9387-d2aaa291c493
+    _outputPortName: Children
+    _inputNodeGuid: f32db3d4-c301-4e3c-b02b-8d52a41dd81a
+    _inputPortName: Parent
+  - _outputNodeGuid: 942d3971-0963-43e3-9387-d2aaa291c493
+    _outputPortName: Children
+    _inputNodeGuid: ac605f88-d016-405c-89e9-eb9b2f8874f8
+    _inputPortName: Parent
+  - _outputNodeGuid: 942d3971-0963-43e3-9387-d2aaa291c493
+    _outputPortName: Children
+    _inputNodeGuid: 8a40cd60-7385-4c15-8465-70955412a2ca
+    _inputPortName: Parent
+  _cachedHeaders: []
+  _lastFetchTimeTicks: 0

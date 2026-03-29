@@ -10,13 +10,13 @@ namespace DataGraph.Data
     public struct HeroBlob
     {
         public BlobString name;
-        public StatBlob stats;
-        public BlobString icon;
+        public StatBlob stat;
+        public BlobString sprite;
     }
 
     public struct StatBlob
     {
         public int hp;
-        public int atk;
+        public int attack;
     }
 }

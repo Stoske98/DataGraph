@@ -26,9 +26,9 @@ namespace DataGraph.Data
             
             {
                 builder.AllocateString(ref valuesBuilder[i].name, values[i].name ?? "");
-                valuesBuilder[i].stats.hp = values[i].stats.hp;
-                valuesBuilder[i].stats.atk = values[i].stats.atk;
-                builder.AllocateString(ref valuesBuilder[i].icon, values[i].icon ?? "");
+                valuesBuilder[i].stat.hp = values[i].stat.hp;
+                valuesBuilder[i].stat.attack = values[i].stat.attack;
+                builder.AllocateString(ref valuesBuilder[i].sprite, values[i].sprite ?? "");
             }
 
             var result = builder.CreateBlobAssetReference<HeroBlobDatabase>(Allocator.Persistent);
@@ -39,14 +39,14 @@ namespace DataGraph.Data
         public struct HeroBlobSource
         {
             public string name;
-            public StatBlobSource stats;
-            public string icon;
+            public StatBlobSource stat;
+            public string sprite;
         }
 
         public struct StatBlobSource
         {
             public int hp;
-            public int atk;
+            public int attack;
         }
 
         public static void Register(BlobAssetReference<HeroBlobDatabase> blobRef)

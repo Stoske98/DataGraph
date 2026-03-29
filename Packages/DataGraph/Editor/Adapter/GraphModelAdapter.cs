@@ -1,20 +1,14 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Reflection;
-using Unity.GraphToolkit.Editor;
 using DataGraph.Editor.Domain;
-using DataGraph.Editor.Nodes;
-using DataGraph.Editor.Public;
 using DataGraph.Runtime;
 
 namespace DataGraph.Editor.Adapter
 {
     /// <summary>
-    /// Reads a GTK Graph (DataGraphAsset) and produces a ParseableGraph
-    /// domain model. Uses reflection to traverse GTK internal wire models
-    /// since the public port API does not resolve connections when graphs
-    /// are loaded programmatically.
+    /// Reads a DataGraphAsset and produces an immutable ParseableGraph.
+    /// No GTK dependency — reads SerializedNode and SerializedEdge directly.
+    /// Output is identical to the old GTK adapter — downstream pipeline unchanged.
     /// </summary>
     internal sealed class GraphModelAdapter
     {
@@ -32,301 +26,233 @@ namespace DataGraph.Editor.Adapter
                 if (rootNode == null)
                     return Result<ParseableGraph>.Failure("Graph must have exactly one Root node.");
 
-                var childMap = BuildChildMapViaReflection(graphAsset);
-                var parseableRoot = ConvertNode(rootNode, childMap);
+                var childMap = BuildChildMap(graphAsset);
+                var parseableRoot = ConvertNode(rootNode, childMap, graphAsset);
 
                 var allNodes = new List<ParseableNode>();
                 CollectNodes(parseableRoot, allNodes);
+
+                var graphName = !string.IsNullOrEmpty(graphAsset.GraphName)
+                    ? graphAsset.GraphName
+                    : graphAsset.name;
 
                 var graph = new ParseableGraph(
                     parseableRoot,
                     allNodes,
                     graphAsset.SheetId,
                     graphAsset.HeaderRowOffset,
-                    graphAsset.GraphName,
+                    graphName,
                     graphAsset.SheetName);
 
                 return Result<ParseableGraph>.Success(graph);
             }
             catch (Exception ex)
             {
-                return Result<ParseableGraph>.Failure($"Graph adaptation failed: {ex.Message}");
+                return Result<ParseableGraph>.Failure($"Adapter error: {ex.Message}");
             }
         }
 
-        private Node FindRootNode(DataGraphAsset graphAsset)
+        private static SerializedNode FindRootNode(DataGraphAsset graph)
         {
-            Node root = null;
-            for (int i = 0; i < graphAsset.nodeCount; i++)
-            {
-                if (graphAsset.GetNode(i) is not Node node) continue;
-                if (!IsRootNode(node)) continue;
-                if (root != null) return null;
-                root = node;
-            }
-            return root;
-        }
-
-        private static bool IsRootNode(Node node)
-        {
-            return node is DictionaryRootNode
-                or ArrayRootNode
-                or ObjectRootNode;
+            foreach (var node in graph.Nodes)
+                if (NodeTypeRegistry.IsRootNode(node.TypeName))
+                    return node;
+            return null;
         }
 
         /// <summary>
-        /// Builds parent-to-children map by traversing GTK wire models via reflection.
-        /// Path: Graph.m_Implementation -> GraphModel.NodeModels + GraphModel.WireModels.
-        /// Each WireModel has FromPort.NodeModel and ToPort.NodeModel which map to
-        /// User Nodes through IUserNodeModelImp.Node.
+        /// Builds parent-to-children map from edges.
+        /// Output node = parent, Input node = child.
         /// </summary>
-        private Dictionary<Node, List<Node>> BuildChildMapViaReflection(DataGraphAsset graphAsset)
+        private static Dictionary<string, List<SerializedNode>> BuildChildMap(DataGraphAsset graph)
         {
-            var map = new Dictionary<Node, List<Node>>();
-
-            var implField = typeof(Graph).GetField("m_Implementation",
-                BindingFlags.NonPublic | BindingFlags.Instance);
-            var impl = implField?.GetValue(graphAsset);
-            if (impl == null) return map;
-
-            var nodeModelToUserNode = new Dictionary<object, Node>();
-            var nodeModelsProp = impl.GetType().GetProperty("NodeModels",
-                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-
-            if (nodeModelsProp != null)
+            var map = new Dictionary<string, List<SerializedNode>>();
+            foreach (var edge in graph.Edges)
             {
-                var nodeModels = nodeModelsProp.GetValue(impl) as IList;
-                if (nodeModels != null)
-                {
-                    foreach (var nm in nodeModels)
-                    {
-                        if (nm == null) continue;
-                        var userNode = GetUserNodeFromNodeModel(nm);
-                        if (userNode != null)
-                            nodeModelToUserNode[nm] = userNode;
-                    }
-                }
+                if (!map.ContainsKey(edge.OutputNodeGuid))
+                    map[edge.OutputNodeGuid] = new List<SerializedNode>();
+                var child = graph.FindNode(edge.InputNodeGuid);
+                if (child != null)
+                    map[edge.OutputNodeGuid].Add(child);
             }
-
-            var wireModelsProp = impl.GetType().GetProperty("WireModels",
-                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-            var wireModels = wireModelsProp?.GetValue(impl) as IList;
-
-            if (wireModels == null || wireModels.Count == 0) return map;
-
-            var guidToUserNode = new Dictionary<string, Node>();
-            foreach (var kvp in nodeModelToUserNode)
-            {
-                var guid = GetGuidString(kvp.Key);
-                if (!string.IsNullOrEmpty(guid))
-                    guidToUserNode[guid] = kvp.Value;
-            }
-
-            foreach (var wire in wireModels)
-            {
-                if (wire == null) continue;
-
-                var fromGuid = GetWireNodeGuid(wire, "FromNodeGuid");
-                var toGuid = GetWireNodeGuid(wire, "ToNodeGuid");
-
-                if (string.IsNullOrEmpty(fromGuid) || string.IsNullOrEmpty(toGuid)) continue;
-
-                if (!guidToUserNode.TryGetValue(fromGuid, out var parentNode)) continue;
-                if (!guidToUserNode.TryGetValue(toGuid, out var childNode)) continue;
-
-                if (!map.TryGetValue(parentNode, out var children))
-                {
-                    children = new List<Node>();
-                    map[parentNode] = children;
-                }
-
-                if (!children.Contains(childNode))
-                    children.Add(childNode);
-            }
-
             return map;
         }
 
-        /// <summary>
-        /// Extracts the User Node from an internal NodeModel via IUserNodeModelImp.Node property.
-        /// </summary>
-        private static Node GetUserNodeFromNodeModel(object nodeModel)
+        private ParseableNode ConvertNode(SerializedNode node,
+            Dictionary<string, List<SerializedNode>> childMap,
+            DataGraphAsset graph)
         {
-            var nodeProp = nodeModel.GetType().GetProperty("Node",
-                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-            if (nodeProp == null) return null;
-            return nodeProp.GetValue(nodeModel) as Node;
-        }
+            var children = ConvertChildren(node.Guid, childMap, graph);
 
-        /// <summary>
-        /// Gets a GUID string from a wire's node reference property (FromNodeGuid or ToNodeGuid).
-        /// </summary>
-        private static string GetWireNodeGuid(object wire, string propertyName)
-        {
-            var prop = wire.GetType().GetProperty(propertyName,
-                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-            if (prop == null)
+            var rootTypeName = graph.GraphName ?? "Unnamed";
+
+            return node.TypeName switch
             {
-                var field = wire.GetType().GetField(propertyName,
-                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-                return field?.GetValue(wire)?.ToString();
-            }
-            return prop.GetValue(wire)?.ToString();
-        }
-
-        /// <summary>
-        /// Gets the GUID string from a NodeModel's Guid property.
-        /// </summary>
-        private static string GetGuidString(object nodeModel)
-        {
-            var guidProp = nodeModel.GetType().GetProperty("Guid",
-                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-            return guidProp?.GetValue(nodeModel)?.ToString();
-        }
-
-        private ParseableNode ConvertNode(Node node, Dictionary<Node, List<Node>> childMap)
-        {
-            node.DefineNode();
-            var children = ConvertChildren(node, childMap);
-
-            return node switch
-            {
-                DictionaryRootNode => new ParseableDictionaryRoot(
-                    GetOption<string>(node, "TypeName"),
-                    GetColumnOption(node, "KeyColumn"),
-                    GetOption<KeyType>(node, "KeyType"),
+                NodeTypeRegistry.Types.DictionaryRoot => new ParseableDictionaryRoot(
+                    rootTypeName,
+                    ResolveColumn(node.GetProperty("KeyColumn"), graph),
+                    ParseKeyType(node.GetProperty("KeyType")),
                     children),
 
-                ArrayRootNode => new ParseableArrayRoot(
-                    GetOption<string>(node, "TypeName"),
+                NodeTypeRegistry.Types.ArrayRoot => new ParseableArrayRoot(
+                    rootTypeName,
                     children),
 
-                ObjectRootNode => new ParseableObjectRoot(
-                    GetOption<string>(node, "TypeName"),
+                NodeTypeRegistry.Types.ObjectRoot => new ParseableObjectRoot(
+                    rootTypeName,
                     children),
 
-                ObjectFieldNode => new ParseableObjectField(
-                    GetOption<string>(node, "FieldName"),
-                    GetOption<string>(node, "TypeName"),
+                NodeTypeRegistry.Types.EnumRoot => new ParseableEnumRoot(
+                    rootTypeName,
+                    ResolveColumn(node.GetProperty("NameColumn"), graph),
+                    ResolveColumn(node.GetProperty("ValueColumn"), graph)),
+
+                NodeTypeRegistry.Types.FlagRoot => new ParseableFlagRoot(
+                    rootTypeName,
+                    ResolveColumn(node.GetProperty("NameColumn"), graph),
+                    ResolveColumn(node.GetProperty("ValueColumn"), graph)),
+
+                NodeTypeRegistry.Types.ObjectField => new ParseableObjectField(
+                    node.GetProperty("FieldName"),
+                    node.GetProperty("TypeName"),
                     children),
 
-                VerticalArrayFieldNode => new ParseableArrayField(
-                    GetOption<string>(node, "FieldName"),
-                    GetOption<string>(node, "TypeName"),
+                NodeTypeRegistry.Types.VerticalArrayField => new ParseableArrayField(
+                    node.GetProperty("FieldName"),
+                    node.GetProperty("TypeName"),
                     ArrayMode.Vertical,
-                    GetColumnOption(node, "IndexColumn"),
+                    ResolveColumn(node.GetProperty("IndexColumn"), graph),
                     null,
                     children),
 
-                HorizontalArrayFieldNode => new ParseableArrayField(
-                    GetOption<string>(node, "FieldName"),
+                NodeTypeRegistry.Types.HorizontalArrayField => new ParseableArrayField(
+                    node.GetProperty("FieldName"),
                     null,
                     ArrayMode.Horizontal,
                     null,
-                    GetOption<string>(node, "Separator"),
+                    node.GetProperty("Separator", ","),
                     children),
 
-                DictionaryFieldNode => new ParseableDictionaryField(
-                    GetOption<string>(node, "FieldName"),
-                    GetOption<string>(node, "TypeName"),
-                    GetColumnOption(node, "KeyColumn"),
-                    GetOption<KeyType>(node, "KeyType"),
+                NodeTypeRegistry.Types.DictionaryField => new ParseableDictionaryField(
+                    node.GetProperty("FieldName"),
+                    node.GetProperty("TypeName"),
+                    ResolveColumn(node.GetProperty("KeyColumn"), graph),
+                    ParseKeyType(node.GetProperty("KeyType")),
                     children),
 
-                StringFieldNode => new ParseableCustomField(
-                    GetOption<string>(node, "FieldName"),
-                    GetColumnOption(node, "Column"),
+                NodeTypeRegistry.Types.StringField => new ParseableCustomField(
+                    node.GetProperty("FieldName"),
+                    ResolveColumn(node.GetProperty("Column"), graph),
                     FieldValueType.String, null, null, null),
 
-                NumberFieldNode => CreateNumberField(node),
+                NodeTypeRegistry.Types.NumberField => CreateNumberField(node, graph),
 
-                BoolFieldNode => new ParseableCustomField(
-                    GetOption<string>(node, "FieldName"),
-                    GetColumnOption(node, "Column"),
+                NodeTypeRegistry.Types.BoolField => new ParseableCustomField(
+                    node.GetProperty("FieldName"),
+                    ResolveColumn(node.GetProperty("Column"), graph),
                     FieldValueType.Bool, null, null, null),
 
-                Vector2FieldNode => new ParseableCustomField(
-                    GetOption<string>(node, "FieldName"),
-                    GetColumnOption(node, "Column"),
+                NodeTypeRegistry.Types.Vector2Field => new ParseableCustomField(
+                    node.GetProperty("FieldName"),
+                    ResolveColumn(node.GetProperty("Column"), graph),
                     FieldValueType.Vector2,
-                    GetOption<string>(node, "Separator"), null, null),
+                    node.GetProperty("Separator", ","), null, null),
 
-                Vector3FieldNode => new ParseableCustomField(
-                    GetOption<string>(node, "FieldName"),
-                    GetColumnOption(node, "Column"),
+                NodeTypeRegistry.Types.Vector3Field => new ParseableCustomField(
+                    node.GetProperty("FieldName"),
+                    ResolveColumn(node.GetProperty("Column"), graph),
                     FieldValueType.Vector3,
-                    GetOption<string>(node, "Separator"), null, null),
+                    node.GetProperty("Separator", ","), null, null),
 
-                ColorFieldNode => new ParseableCustomField(
-                    GetOption<string>(node, "FieldName"),
-                    GetColumnOption(node, "Column"),
+                NodeTypeRegistry.Types.ColorField => new ParseableCustomField(
+                    node.GetProperty("FieldName"),
+                    ResolveColumn(node.GetProperty("Column"), graph),
                     FieldValueType.Color, null,
-                    GetOption<string>(node, "Format"), null),
+                    node.GetProperty("Format", "Hex"), null),
 
-                AssetFieldNode => new ParseableAssetField(
-                    GetOption<string>(node, "FieldName"),
-                    GetColumnOption(node, "Column"),
-                    GetOption<AssetType>(node, "AssetType"),
-                    GetOption<AssetLoadMethod>(node, "LoadMethod")),
+                NodeTypeRegistry.Types.AssetField => new ParseableAssetField(
+                    node.GetProperty("FieldName"),
+                    ResolveColumn(node.GetProperty("Column"), graph),
+                    ParseAssetType(node.GetProperty("AssetType", "Sprite")),
+                    ParseLoadMethod(node.GetProperty("LoadMethod"))),
 
-                CustomFieldNodeBase custom => new ParseableCustomField(
-                    custom.GetFieldName(),
-                    custom.GetColumn(),
-                    FieldValueType.String,
-                    null, null, null),
+                NodeTypeRegistry.Types.EnumField => new ParseableEnumField(
+                    node.GetProperty("FieldName"),
+                    ResolveColumn(node.GetProperty("Column"), graph),
+                    node.GetProperty("EnumTypeName")),
 
-                _ => throw new InvalidOperationException(
-                    $"Unknown node type: {node.GetType().Name}")
+                NodeTypeRegistry.Types.FlagField => new ParseableFlagField(
+                    node.GetProperty("FieldName"),
+                    ResolveColumn(node.GetProperty("Column"), graph),
+                    node.GetProperty("FlagTypeName"),
+                    node.GetProperty("Separator", ",")),
+
+                _ => throw new InvalidOperationException($"Unknown node type: {node.TypeName}")
             };
         }
 
-        private ParseableCustomField CreateNumberField(Node node)
+        private ParseableNode[] ConvertChildren(string parentGuid,
+            Dictionary<string, List<SerializedNode>> childMap,
+            DataGraphAsset graph)
         {
-            var numberType = GetOption<NumberType>(node, "NumberType");
+            if (!childMap.TryGetValue(parentGuid, out var childNodes) || childNodes.Count == 0)
+                return Array.Empty<ParseableNode>();
+
+            var result = new ParseableNode[childNodes.Count];
+            for (int i = 0; i < childNodes.Count; i++)
+                result[i] = ConvertNode(childNodes[i], childMap, graph);
+            return result;
+        }
+
+        private static ParseableCustomField CreateNumberField(SerializedNode node, DataGraphAsset graph)
+        {
+            var numberType = node.GetProperty("NumberType", "Int");
             var fieldValueType = numberType switch
             {
-                NumberType.Float => FieldValueType.Float,
-                NumberType.Double => FieldValueType.Double,
+                "Float" => FieldValueType.Float,
+                "Double" => FieldValueType.Double,
                 _ => FieldValueType.Int
             };
-
             return new ParseableCustomField(
-                GetOption<string>(node, "FieldName"),
-                GetColumnOption(node, "Column"),
+                node.GetProperty("FieldName"),
+                ResolveColumn(node.GetProperty("Column"), graph),
                 fieldValueType, null, null, null);
         }
 
         /// <summary>
-        /// Reads a GTK node option value by name. Returns default(T) if not found.
+        /// Resolves a column reference. If value matches a cached header name,
+        /// converts to column letter. Otherwise returns as-is.
         /// </summary>
-        private static T GetOption<T>(Node node, string optionName)
+        private static string ResolveColumn(string columnValue, DataGraphAsset graph)
         {
-            var option = node.GetNodeOptionByName(optionName);
-            if (option != null && option.TryGetValue<T>(out var value))
-                return value;
-            return default;
+            if (string.IsNullOrEmpty(columnValue)) return "A";
+
+            var headers = graph.CachedHeaders;
+            for (int i = 0; i < headers.Count; i++)
+            {
+                if (string.Equals(headers[i], columnValue, StringComparison.OrdinalIgnoreCase))
+                    return RawTableData.IndexToColumnLetter(i);
+            }
+            return columnValue;
         }
 
-        /// <summary>
-        /// Reads a column option as string. Returns "A" if not found.
-        /// </summary>
-        private static string GetColumnOption(Node node, string optionName)
+        private static KeyType ParseKeyType(string value)
         {
-            var option = node.GetNodeOptionByName(optionName);
-            if (option != null && option.TryGetValue<string>(out var col) && !string.IsNullOrEmpty(col))
-                return col;
-            return "A";
+            return value == "String" ? KeyType.String : KeyType.Int;
         }
 
-        private ParseableNode[] ConvertChildren(Node parent, Dictionary<Node, List<Node>> childMap)
+        private static AssetLoadMethod ParseLoadMethod(string value)
         {
-            if (!childMap.TryGetValue(parent, out var gtkChildren) || gtkChildren.Count == 0)
-                return Array.Empty<ParseableNode>();
+            if (Enum.TryParse<AssetLoadMethod>(value, out var result))
+                return result;
+            return AssetLoadMethod.AssetDatabase;
+        }
 
-            var result = new ParseableNode[gtkChildren.Count];
-            for (int i = 0; i < gtkChildren.Count; i++)
-                result[i] = ConvertNode(gtkChildren[i], childMap);
-            return result;
+        private static AssetType ParseAssetType(string value)
+        {
+            if (Enum.TryParse<AssetType>(value, out var result))
+                return result;
+            return AssetType.Sprite;
         }
 
         private static void CollectNodes(ParseableNode node, List<ParseableNode> result)

@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using DataGraph.Editor.Adapter;
 using DataGraph.Editor.CodeGen;
 using DataGraph.Editor.Domain;
-using DataGraph.Editor.Nodes;
 using DataGraph.Editor.Public;
 using DataGraph.Editor.Parsing;
 using DataGraph.Editor.Serialization;
