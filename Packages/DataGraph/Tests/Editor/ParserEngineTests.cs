@@ -527,7 +527,7 @@ namespace DataGraph.Tests.Editor
                 .WithGraphName("Items")
                 .WithRoot(new ParseableDictionaryRoot("Item", "A", KeyType.Int, new ParseableNode[]
                 {
-                    new ParseableAssetField("icon", "B", AssetType.Sprite, AssetLoadMethod.Addressables),
+                    new ParseableAssetField("icon", "B", AssetType.Sprite),
                 }))
                 .Build();
 

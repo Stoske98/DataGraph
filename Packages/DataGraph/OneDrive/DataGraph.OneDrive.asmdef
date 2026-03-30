@@ -1,0 +1,19 @@
+{
+    "name": "DataGraph.OneDrive",
+    "rootNamespace": "DataGraph.OneDrive",
+    "references": [
+        "DataGraph.Runtime",
+        "DataGraph.Editor.Public"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -182,7 +182,7 @@ namespace DataGraph.Tests.Editor
                 .WithGraphName("Items")
                 .WithRoot(new ParseableDictionaryRoot("Item", "A", KeyType.Int, new ParseableNode[]
                 {
-                    new ParseableAssetField("icon", "B", AssetType.Sprite, AssetLoadMethod.Addressables),
+                    new ParseableAssetField("icon", "B", AssetType.Sprite),
                 }))
                 .Build();
 
@@ -191,7 +191,6 @@ namespace DataGraph.Tests.Editor
             Assert.AreEqual("icon", asset.FieldName);
             Assert.AreEqual("B", asset.Column);
             Assert.AreEqual(AssetType.Sprite, asset.AssetType);
-            Assert.AreEqual(AssetLoadMethod.Addressables, asset.LoadMethod);
             Assert.IsTrue(asset.IsLeaf);
         }
 

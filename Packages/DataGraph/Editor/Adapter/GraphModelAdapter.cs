@@ -173,8 +173,7 @@ namespace DataGraph.Editor.Adapter
                 NodeTypeRegistry.Types.AssetField => new ParseableAssetField(
                     node.GetProperty("FieldName"),
                     ResolveColumn(node.GetProperty("Column"), graph),
-                    ParseAssetType(node.GetProperty("AssetType", "Sprite")),
-                    ParseLoadMethod(node.GetProperty("LoadMethod"))),
+                    ParseAssetType(node.GetProperty("AssetType", "Sprite"))),
 
                 NodeTypeRegistry.Types.EnumField => new ParseableEnumField(
                     node.GetProperty("FieldName"),
@@ -239,13 +238,6 @@ namespace DataGraph.Editor.Adapter
         private static KeyType ParseKeyType(string value)
         {
             return value == "String" ? KeyType.String : KeyType.Int;
-        }
-
-        private static AssetLoadMethod ParseLoadMethod(string value)
-        {
-            if (Enum.TryParse<AssetLoadMethod>(value, out var result))
-                return result;
-            return AssetLoadMethod.AssetDatabase;
         }
 
         private static AssetType ParseAssetType(string value)

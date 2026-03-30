@@ -123,10 +123,7 @@ namespace DataGraph.Editor.CodeGen
                     break;
 
                 case ParseableAssetField asset:
-                    if (asset.LoadMethod == AssetLoadMethod.Addressables)
-                        w.Line($"public string {asset.FieldName};");
-                    else
-                        w.Line($"public {AssetTypeMapper.GetCSharpTypeName(asset.AssetType)} {asset.FieldName};");
+                    w.Line($"public {AssetTypeMapper.GetCSharpTypeName(asset.AssetType)} {asset.FieldName};");
                     break;
 
                 case ParseableObjectField obj:

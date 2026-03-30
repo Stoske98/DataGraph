@@ -95,8 +95,7 @@ namespace DataGraph.Editor.Parsing
                 new ParsedAssetReference(
                     field.FieldName,
                     raw.Trim(),
-                    field.AssetType,
-                    field.LoadMethod), 1);
+                    field.AssetType), 1);
         }
 
         private ElementParseResult ParseObjectField(ParseableObjectField field, int row, int maxRow)

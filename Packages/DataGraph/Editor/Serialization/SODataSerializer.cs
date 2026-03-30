@@ -156,7 +156,7 @@ namespace DataGraph.Editor.Serialization
             switch (node)
             {
                 case ParsedAssetReference assetRef:
-                    return ResolveAssetReference(fieldType, assetRef);
+                    return ResolveAssetReference(assetRef);
 
                 case ParsedValue val:
                     return ConvertValue(fieldType, val.Value);
@@ -226,15 +226,11 @@ namespace DataGraph.Editor.Serialization
 
         /// <summary>
         /// Resolves an asset reference from the preloaded cache.
-        /// For Addressables, returns the path string directly.
         /// </summary>
-        private object ResolveAssetReference(Type fieldType, ParsedAssetReference assetRef)
+        private object ResolveAssetReference(ParsedAssetReference assetRef)
         {
             if (string.IsNullOrEmpty(assetRef.AssetPath))
                 return null;
-
-            if (assetRef.LoadMethod == AssetLoadMethod.Addressables)
-                return assetRef.AssetPath;
 
             _assetCache.TryGetValue(assetRef.AssetPath, out var cached);
             return cached;
@@ -253,7 +249,6 @@ namespace DataGraph.Editor.Serialization
             foreach (var assetRef in refs)
             {
                 if (string.IsNullOrEmpty(assetRef.AssetPath)) continue;
-                if (assetRef.LoadMethod == AssetLoadMethod.Addressables) continue;
                 if (cache.ContainsKey(assetRef.AssetPath)) continue;
 
                 var loadType = AssetTypeMapper.GetSystemType(assetRef.AssetType);

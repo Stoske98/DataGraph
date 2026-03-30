@@ -6,7 +6,8 @@ namespace DataGraph.Editor
     /// <summary>
     /// Lazily detects available ISheetProvider implementations
     /// through assembly reflection. Each provider is in its own
-    /// optional assembly.
+    /// optional assembly: GoogleSheets, LocalFile, OneDrive.
+    /// Also detects optional output format assemblies (Blob, Quantum).
     /// </summary>
     internal static class ProviderRegistry
     {
@@ -14,65 +15,60 @@ namespace DataGraph.Editor
             "DataGraph.GoogleSheets.GoogleSheetsProvider, DataGraph.GoogleSheets";
         private const string LocalFileTypeName =
             "DataGraph.LocalFile.LocalFileProvider, DataGraph.LocalFile";
-        private const string BlobCodeGeneratorTypeName =
-            "DataGraph.Blob.BlobCodeGenerator, DataGraph.Blob";
+        private const string OneDriveTypeName =
+            "DataGraph.OneDrive.OneDriveProvider, DataGraph.OneDrive";
 
-        /// <summary>
-        /// Whether the Google Sheets provider assembly is available.
-        /// </summary>
-        public static bool IsGoogleSheetsAvailable()
-        {
-            return Type.GetType(GoogleSheetsTypeName) != null;
-        }
+        public static bool IsGoogleSheetsAvailable() =>
+            Type.GetType(GoogleSheetsTypeName) != null;
 
-        /// <summary>
-        /// Creates the Google Sheets provider instance.
-        /// </summary>
         public static ISheetProvider CreateGoogleSheetsProvider()
         {
-            var type = Type.GetType(GoogleSheetsTypeName);
-            if (type == null)
-                throw new InvalidOperationException(
+            var type = Type.GetType(GoogleSheetsTypeName)
+                ?? throw new InvalidOperationException(
                     "Google Sheets provider is not installed.");
-
             return (ISheetProvider)Activator.CreateInstance(type);
         }
 
-        /// <summary>
-        /// Whether the Local File provider assembly is available.
-        /// </summary>
-        public static bool IsLocalFileAvailable()
-        {
-            return Type.GetType(LocalFileTypeName) != null;
-        }
+        public static bool IsLocalFileAvailable() =>
+            Type.GetType(LocalFileTypeName) != null;
 
-        /// <summary>
-        /// Creates the Local File provider instance.
-        /// </summary>
         public static ISheetProvider CreateLocalFileProvider()
         {
-            var type = Type.GetType(LocalFileTypeName);
-            if (type == null)
-                throw new InvalidOperationException(
+            var type = Type.GetType(LocalFileTypeName)
+                ?? throw new InvalidOperationException(
                     "Local File provider is not installed.");
+            return (ISheetProvider)Activator.CreateInstance(type);
+        }
 
+        public static bool IsOneDriveAvailable() =>
+            Type.GetType(OneDriveTypeName) != null;
+
+        public static ISheetProvider CreateOneDriveProvider()
+        {
+            var type = Type.GetType(OneDriveTypeName)
+                ?? throw new InvalidOperationException(
+                    "OneDrive provider is not installed.");
             return (ISheetProvider)Activator.CreateInstance(type);
         }
 
         /// <summary>
-        /// Whether Blob output is available (requires Unity Entities package).
+        /// Returns true if the SheetId matches OneDrive URL patterns.
+        /// Used by DataGraphWindow for provider auto-detection.
         /// </summary>
-        public static bool IsBlobAvailable()
+        public static bool IsOneDrivePath(string sheetId)
         {
-            return Type.GetType("Unity.Entities.BlobBuilder, Unity.Entities") != null;
+            if (string.IsNullOrEmpty(sheetId)) return false;
+            if (sheetId.StartsWith("onedrive://")) return true;
+            if (sheetId.Contains("1drv.ms")) return true;
+            if (sheetId.Contains("sharepoint.com")) return true;
+            if (sheetId.Contains("onedrive.live.com")) return true;
+            return false;
         }
 
-        /// <summary>
-        /// Whether Quantum output is available (requires Photon Quantum SDK).
-        /// </summary>
-        public static bool IsQuantumAvailable()
-        {
-            return Type.GetType("Quantum.AssetObject, Quantum.Engine") != null;
-        }
+        public static bool IsBlobAvailable() =>
+            Type.GetType("Unity.Entities.BlobBuilder, Unity.Entities") != null;
+
+        public static bool IsQuantumAvailable() =>
+            Type.GetType("Quantum.AssetObject, Quantum.Engine") != null;
     }
 }

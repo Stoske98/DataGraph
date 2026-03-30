@@ -27,7 +27,6 @@ namespace DataGraph.Editor
     internal sealed class DataGraphWindow : EditorWindow
     {
         [SerializeField] private DataGraphConsole _console = new();
-        [SerializeField] private string _outputPath = "Assets/DataGraph/Generated";
         [SerializeField] private List<GraphEntry> _graphEntries = new();
         [SerializeField] private float _leftWidth = 240f;
         [SerializeField] private float _bottomHeight = 180f;
@@ -49,8 +48,9 @@ namespace DataGraph.Editor
         private bool _isRunning;
         private bool _needsRefresh = true;
 
-        // JSON preview
         private string _jsonPreviewText = "";
+
+        private string OutputPath => DataGraphSettings.Instance.Paths.GeneratedFolder;
 
         [MenuItem("DataGraph/Editor")]
         public static void Open()
@@ -60,13 +60,18 @@ namespace DataGraph.Editor
             wnd.minSize = new Vector2(900, 600);
         }
 
+        [MenuItem("DataGraph/Settings")]
+        public static void OpenSettings()
+        {
+            SettingsService.OpenProjectSettings("Project/DataGraph");
+        }
+
         private void OnEnable()
         {
             _needsRefresh = true;
             wantsMouseMove = true;
             EditorApplication.projectChanged += OnProjectChanged;
 
-            // Restore active graph after recompile
             if (!string.IsNullOrEmpty(_activeGraphPath))
             {
                 _activeGraph = AssetDatabase.LoadAssetAtPath<DataGraphAsset>(_activeGraphPath);
@@ -102,13 +107,17 @@ namespace DataGraph.Editor
             _searchWindow = CreateInstance<DataGraphSearchWindow>();
             _searchWindow.Initialize(_graphView, this);
             _graphView.SetSearchWindow(_searchWindow);
-            _graphView.OnGraphStructureChanged += RefreshJsonPreview;
+            _graphView.OnGraphStructureChanged += OnGraphStructureChanged;
 
             UpdateGraphViewRect();
 
-            // Reload active graph after recompile
             if (_activeGraph != null)
                 _graphView.LoadGraph(_activeGraph);
+        }
+
+        private void OnGraphStructureChanged()
+        {
+            RefreshJsonPreview(manual: false);
         }
 
         private void UpdateGraphViewRect()
@@ -369,7 +378,7 @@ namespace DataGraph.Editor
             EditorGUILayout.LabelField("JSON Preview", EditorStyles.miniLabel, GUILayout.Width(80));
             GUILayout.FlexibleSpace();
             if (GUILayout.Button("Refresh", EditorStyles.toolbarButton, GUILayout.Width(55)))
-                RefreshJsonPreview();
+                RefreshJsonPreview(manual: true);
             EditorGUILayout.EndHorizontal();
 
             _jsonScroll = EditorGUILayout.BeginScrollView(_jsonScroll);
@@ -410,27 +419,21 @@ namespace DataGraph.Editor
 
         private static void DrawSeverityBadge(Color color, int count)
         {
-            EditorGUILayout.BeginHorizontal(GUILayout.Width(28));
-            var rect = GUILayoutUtility.GetRect(8, 8, GUILayout.Width(8));
-            rect.y += 6;
-            EditorGUI.DrawRect(rect, color);
-            EditorGUILayout.LabelField(count.ToString(), EditorStyles.miniLabel, GUILayout.Width(14));
-            EditorGUILayout.EndHorizontal();
+            if (count <= 0) return;
+            var prev = GUI.backgroundColor;
+            GUI.backgroundColor = color;
+            GUILayout.Label(count.ToString(), EditorStyles.miniButton,
+                GUILayout.Width(24), GUILayout.Height(16));
+            GUI.backgroundColor = prev;
         }
 
         private void DrawLogGroup(GraphLogGroup group)
         {
-            var statusColor = !group.IsComplete ? Color.gray
-                : group.Success ? new Color(0.1f, 0.7f, 0.4f)
-                : new Color(0.9f, 0.3f, 0.3f);
-            var statusIcon = !group.IsComplete ? "\u25CB"
-                : group.Success ? "\u2714" : "\u2716";
-
             EditorGUILayout.BeginHorizontal();
             var prev = GUI.contentColor;
-            GUI.contentColor = statusColor;
-            EditorGUILayout.LabelField(statusIcon, GUILayout.Width(14));
-            GUI.contentColor = prev;
+            GUI.contentColor = group.Success
+                ? new Color(0.1f, 0.7f, 0.4f)
+                : new Color(0.9f, 0.3f, 0.3f);
             group.IsExpanded = EditorGUILayout.Foldout(group.IsExpanded, group.GraphName, true);
             EditorGUILayout.EndHorizontal();
 
@@ -472,13 +475,11 @@ namespace DataGraph.Editor
 
         private void DrawResizeHandles()
         {
-            // Vertical resize handle (left panel width)
             var vertHandle = new Rect(_leftWidth - 2, 0, 6, position.height - _bottomHeight);
             EditorGUI.DrawRect(new Rect(_leftWidth - 1, 0, 2, position.height - _bottomHeight),
                 new Color(0.15f, 0.15f, 0.15f, 1f));
             EditorGUIUtility.AddCursorRect(vertHandle, MouseCursor.ResizeHorizontal);
 
-            // Horizontal resize handle (bottom panel height)
             var horizY = position.height - _bottomHeight - 2;
             var horizHandle = new Rect(0, horizY, position.width, 6);
             EditorGUI.DrawRect(new Rect(0, horizY, position.width, 2),
@@ -531,13 +532,13 @@ namespace DataGraph.Editor
             _activeGraph = graphAsset;
             _activeGraphPath = graphAsset != null ? AssetDatabase.GetAssetPath(graphAsset) : "";
             _graphView?.LoadGraph(graphAsset);
-            RefreshJsonPreview();
+            RefreshJsonPreview(manual: true);
             Repaint();
         }
 
         private void CreateNewGraph()
         {
-            var folder = "Assets/DataGraph/Graphs";
+            var folder = DataGraphSettings.Instance.Paths.GraphsFolder;
             EnsureFolderExists(folder);
 
             var path = AssetDatabase.GenerateUniqueAssetPath($"{folder}/NewGraph.asset");
@@ -556,7 +557,7 @@ namespace DataGraph.Editor
                 ? entry.GraphAsset.GraphName
                 : Path.GetFileNameWithoutExtension(entry.AssetPath);
 
-            var generatedFolder = Path.Combine(_outputPath, graphName);
+            var generatedFolder = Path.Combine(OutputPath, graphName);
             if (AssetDatabase.IsValidFolder(generatedFolder))
                 AssetDatabase.DeleteAsset(generatedFolder);
 
@@ -663,7 +664,7 @@ namespace DataGraph.Editor
                     };
                     await command.ExecuteAsync(
                         entry.GraphAsset, provider, formats,
-                        _outputPath, log, _cts.Token);
+                        OutputPath, log, _cts.Token);
                     Repaint();
                 }
             }
@@ -706,21 +707,21 @@ namespace DataGraph.Editor
                         var log = _console.BeginGroup(entry.DisplayName + " (SO)");
                         await command.CreateSOAssetsAsync(
                             entry.GraphAsset, provider,
-                            _outputPath, log, _cts.Token);
+                            OutputPath, log, _cts.Token);
                     }
                     if (entry.GenerateBlob)
                     {
                         var log = _console.BeginGroup(entry.DisplayName + " (Blob)");
                         await command.CreateBlobAssetsAsync(
                             entry.GraphAsset, provider,
-                            _outputPath, log, _cts.Token);
+                            OutputPath, log, _cts.Token);
                     }
                     if (entry.GenerateQuantum)
                     {
                         var log = _console.BeginGroup(entry.DisplayName + " (Quantum)");
                         await command.CreateQuantumAssetsAsync(
                             entry.GraphAsset, provider,
-                            _outputPath, log, _cts.Token);
+                            OutputPath, log, _cts.Token);
                     }
                     Repaint();
                 }
@@ -742,8 +743,11 @@ namespace DataGraph.Editor
 
         // ==================== JSON PREVIEW ====================
 
-        private async void RefreshJsonPreview()
+        private async void RefreshJsonPreview(bool manual = false)
         {
+            if (!manual && !DataGraphSettings.Instance.Editor.AutoRefreshJsonPreview)
+                return;
+
             if (_activeGraph == null || string.IsNullOrEmpty(_activeGraph.SheetId))
             {
                 _jsonPreviewText = "Select a graph with a data source.";
@@ -795,16 +799,26 @@ namespace DataGraph.Editor
             Repaint();
         }
 
-        // ==================== HELPERS ====================
+        // ==================== PROVIDER RESOLUTION ====================
 
         private static ISheetProvider ResolveProviderForGraph(string sheetId)
         {
+            // 1. Local file: Assets/ prefix or .csv/.tsv/.xlsx extension
             if (IsLocalFilePath(sheetId))
             {
                 if (ProviderRegistry.IsLocalFileAvailable())
                     return ProviderRegistry.CreateLocalFileProvider();
             }
-            else
+
+            // 2. OneDrive: onedrive:// prefix, 1drv.ms, sharepoint.com
+            if (ProviderRegistry.IsOneDrivePath(sheetId))
+            {
+                if (ProviderRegistry.IsOneDriveAvailable())
+                    return ProviderRegistry.CreateOneDriveProvider();
+            }
+
+            // 3. Everything else: assume Google Sheets ID
+            if (!IsLocalFilePath(sheetId) && !ProviderRegistry.IsOneDrivePath(sheetId))
             {
                 if (ProviderRegistry.IsGoogleSheetsAvailable())
                 {
@@ -813,10 +827,14 @@ namespace DataGraph.Editor
                 }
             }
 
+            // Fallback chain: try any available provider
             if (ProviderRegistry.IsLocalFileAvailable())
                 return ProviderRegistry.CreateLocalFileProvider();
+            if (ProviderRegistry.IsOneDriveAvailable())
+                return ProviderRegistry.CreateOneDriveProvider();
             if (ProviderRegistry.IsGoogleSheetsAvailable())
                 return ProviderRegistry.CreateGoogleSheetsProvider();
+
             return null;
         }
 
