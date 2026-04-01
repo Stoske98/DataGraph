@@ -33,6 +33,8 @@ namespace DataGraph.Editor.Parsing
                     ParseableDictionaryRoot dictRoot => ParseDictionaryRoot(dictRoot, nodeParser, context, maxEntries),
                     ParseableArrayRoot arrayRoot => ParseArrayRoot(arrayRoot, nodeParser, context, maxEntries),
                     ParseableObjectRoot objRoot => ParseObjectRoot(objRoot, nodeParser, context),
+                    ParseableEnumRoot enumRoot => ParseEnumRoot(enumRoot, context),
+                    ParseableFlagRoot flagRoot => ParseFlagRoot(flagRoot, context),
                     _ => throw new InvalidOperationException(
                         $"Unknown root node type: {graph.Root.GetType().Name}")
                 };
@@ -146,9 +148,121 @@ namespace DataGraph.Editor.Parsing
         }
 
         /// <summary>
+        /// Parses an EnumRoot graph. Reads name and value from each row
+        /// to produce a ParsedEnumDefinition with ordered members.
+        /// </summary>
+        private ParsedNode ParseEnumRoot(ParseableEnumRoot root, ParseContext context)
+        {
+            var members = ParseEnumMembers(
+                root.TypeName, root.NameColumn, root.ValueColumn, context, isFlags: false);
+            return new ParsedEnumDefinition(root.TypeName, false, members);
+        }
+
+        /// <summary>
+        /// Parses a FlagRoot graph. Same as EnumRoot but marks result as [Flags].
+        /// </summary>
+        private ParsedNode ParseFlagRoot(ParseableFlagRoot root, ParseContext context)
+        {
+            var members = ParseEnumMembers(
+                root.TypeName, root.NameColumn, root.ValueColumn, context, isFlags: true);
+            return new ParsedEnumDefinition(root.TypeName, true, members);
+        }
+
+        private List<EnumMember> ParseEnumMembers(
+            string typeName, string nameColumn, string valueColumn,
+            ParseContext context, bool isFlags)
+        {
+            var members = new List<EnumMember>();
+            var usedNames = new HashSet<string>();
+            int autoValue = isFlags ? 1 : 0;
+
+            for (int row = 0; row < context.TableData.RowCount; row++)
+            {
+                var nameRaw = context.TableData.GetCell(row, nameColumn)?.Trim();
+                if (string.IsNullOrEmpty(nameRaw))
+                    continue;
+
+                var sanitized = SanitizeEnumMemberName(nameRaw);
+                if (string.IsNullOrEmpty(sanitized))
+                {
+                    context.AddWarning(
+                        $"Enum '{typeName}': invalid member name '{nameRaw}' at row {row}, skipping.",
+                        cell: new CellReference(row, nameColumn));
+                    continue;
+                }
+
+                if (!usedNames.Add(sanitized))
+                {
+                    context.AddWarning(
+                        $"Enum '{typeName}': duplicate member '{sanitized}' at row {row}, skipping.",
+                        cell: new CellReference(row, nameColumn));
+                    continue;
+                }
+
+                int value;
+                var valueRaw = context.TableData.GetCell(row, valueColumn)?.Trim();
+                if (!string.IsNullOrEmpty(valueRaw))
+                {
+                    if (!TryParseIntKey(valueRaw, out value))
+                    {
+                        context.AddWarning(
+                            $"Enum '{typeName}': cannot parse value '{valueRaw}' for '{sanitized}' at row {row}, using auto.",
+                            cell: new CellReference(row, valueColumn));
+                        value = autoValue;
+                    }
+                }
+                else
+                {
+                    value = autoValue;
+                }
+
+                members.Add(new EnumMember(sanitized, value));
+
+                if (isFlags)
+                    autoValue = value == 0 ? 1 : value * 2;
+                else
+                    autoValue = value + 1;
+            }
+
+            return members;
+        }
+
+        /// <summary>
+        /// Sanitizes a string to be a valid C# identifier.
+        /// Removes invalid characters, ensures it starts with a letter or underscore.
+        /// </summary>
+        private static string SanitizeEnumMemberName(string raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return null;
+
+            var sb = new System.Text.StringBuilder(raw.Length);
+            for (int i = 0; i < raw.Length; i++)
+            {
+                var c = raw[i];
+                if (c == ' ' || c == '-')
+                {
+                    if (i + 1 < raw.Length && char.IsLetter(raw[i + 1]))
+                    {
+                        sb.Append(char.ToUpperInvariant(raw[i + 1]));
+                        i++;
+                    }
+                    continue;
+                }
+
+                if (char.IsLetterOrDigit(c) || c == '_')
+                    sb.Append(c);
+            }
+
+            if (sb.Length == 0) return null;
+            if (char.IsDigit(sb[0]))
+                sb.Insert(0, '_');
+
+            return sb.ToString();
+        }
+
+        /// <summary>
         /// Scans forward from startRow to find the next row where the key column
         /// has a non-empty value. Returns TableData.RowCount if none found.
-        /// Used to establish maxRow boundaries for child parsers.
         /// </summary>
         private static int FindNextKeyRow(RawTableData data, string keyColumn, int startRow)
         {

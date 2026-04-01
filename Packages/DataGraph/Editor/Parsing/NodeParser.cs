@@ -57,6 +57,8 @@ namespace DataGraph.Editor.Parsing
             {
                 ParseableCustomField custom => ParseCustomField(custom, startRow),
                 ParseableAssetField asset => ParseAssetField(asset, startRow),
+                ParseableEnumField enumField => ParseEnumField(enumField, startRow),
+                ParseableFlagField flagField => ParseFlagField(flagField, startRow),
                 ParseableObjectField obj => ParseObjectField(obj, startRow, maxRow),
                 ParseableArrayField arr => ParseArrayField(arr, startRow, maxRow),
                 ParseableDictionaryField dict => ParseDictionaryField(dict, startRow, maxRow),
@@ -96,6 +98,20 @@ namespace DataGraph.Editor.Parsing
                     field.FieldName,
                     raw.Trim(),
                     field.AssetType), 1);
+        }
+
+        private ElementParseResult ParseEnumField(ParseableEnumField field, int row)
+        {
+            var raw = _context.TableData.GetCell(row, field.Column)?.Trim() ?? "";
+            return new ElementParseResult(
+                new ParsedValue(field.FieldName, raw, typeof(string)), 1);
+        }
+
+        private ElementParseResult ParseFlagField(ParseableFlagField field, int row)
+        {
+            var raw = _context.TableData.GetCell(row, field.Column)?.Trim() ?? "";
+            return new ElementParseResult(
+                new ParsedValue(field.FieldName, raw, typeof(string)), 1);
         }
 
         private ElementParseResult ParseObjectField(ParseableObjectField field, int row, int maxRow)

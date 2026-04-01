@@ -182,8 +182,6 @@ namespace DataGraph.Editor.GraphView
                         new List<string> { "Sprite", "Texture2D", "AudioClip", "GameObject",
                             "Material", "AnimationClip", "RuntimeAnimatorController",
                             "ScriptableObject", "Mesh", "Font", "TextAsset" });
-                    AddEnumDropdown(container, "LoadMethod", "Load Method",
-                        new List<string> { "AssetDatabase", "Addressables", "Resources" });
                     break;
 
                 case NodeTypeRegistry.Types.EnumField:
@@ -283,6 +281,12 @@ namespace DataGraph.Editor.GraphView
 
             var field = new PopupField<string>(label, choices,
                 string.IsNullOrEmpty(current) ? choices[0] : current);
+
+            if (choices.Count > 0)
+            {
+                _nodeData.SetProperty(propKey, choices[0]);
+            }
+
             field.RegisterValueChangedCallback(evt =>
             {
                 if (evt.newValue == "(none generated)") return;
@@ -296,9 +300,15 @@ namespace DataGraph.Editor.GraphView
         private static List<string> ScanGeneratedEnums(bool isFlag)
         {
             var result = new List<string>();
+            var basePath = DataGraphSettings.Instance.Paths.GeneratedFolder;
             var subfolder = isFlag ? "Flags" : "Enums";
+            var searchPath = $"{basePath}/{subfolder}";
+
+            if (!AssetDatabase.IsValidFolder(searchPath))
+                return result;
+
             var guids = AssetDatabase.FindAssets("t:MonoScript",
-                new[] { $"Assets/DataGraph/Generated/{subfolder}" });
+                new[] { searchPath });
             foreach (var guid in guids)
             {
                 var path = AssetDatabase.GUIDToAssetPath(guid);

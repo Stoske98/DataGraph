@@ -158,7 +158,7 @@ namespace DataGraph.Editor
                 Types.Vector2Field => new() { ["FieldName"] = "", ["Column"] = "A", ["Separator"] = "," },
                 Types.Vector3Field => new() { ["FieldName"] = "", ["Column"] = "A", ["Separator"] = "," },
                 Types.ColorField => new() { ["FieldName"] = "", ["Column"] = "A", ["Format"] = "Hex" },
-                Types.AssetField => new() { ["FieldName"] = "", ["Column"] = "A", ["AssetType"] = "Sprite", ["LoadMethod"] = "AssetDatabase" },
+                Types.AssetField => new() { ["FieldName"] = "", ["Column"] = "A", ["AssetType"] = "Sprite" },
                 Types.EnumField => new() { ["FieldName"] = "", ["Column"] = "A", ["EnumTypeName"] = "" },
                 Types.FlagField => new() { ["FieldName"] = "", ["Column"] = "A", ["FlagTypeName"] = "", ["Separator"] = "," },
 

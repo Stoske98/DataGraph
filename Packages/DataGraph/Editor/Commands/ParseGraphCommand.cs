@@ -67,6 +67,13 @@ namespace DataGraph.Editor.Commands
                 var graph = adaptResult.Value;
                 log.LogInfo($"Adapt: {graph.AllNodes.Count} nodes resolved");
 
+                // Early branch for Enum/Flag definition graphs
+                if (graph.Root is ParseableEnumRoot || graph.Root is ParseableFlagRoot)
+                {
+                    return await ExecuteEnumPipelineAsync(
+                        graph, graphAsset, provider, outputBasePath, log, cancellationToken);
+                }
+
                 // 2. Fetch
                 log.LogInfo($"Fetch: requesting data from sheet...");
                 var sheetRef = new SheetReference(
@@ -923,6 +930,91 @@ namespace DataGraph.Editor.Commands
             registry.CleanUp();
             EditorUtility.SetDirty(registry);
             AssetDatabase.SaveAssets();
+        }
+
+        /// <summary>
+        /// Shortened pipeline for Enum/Flag graphs: Fetch -> Parse -> Generate enum C#.
+        /// No SO/Blob/Quantum/JSON output — only a single .cs file with the enum definition.
+        /// </summary>
+        private async Task<bool> ExecuteEnumPipelineAsync(
+            ParseableGraph graph,
+            DataGraphAsset graphAsset,
+            ISheetProvider provider,
+            string outputBasePath,
+            GraphLogGroup log,
+            CancellationToken cancellationToken)
+        {
+            var graphName = graph.GraphName;
+            var isFlag = graph.Root is ParseableFlagRoot;
+            var kind = isFlag ? "Flag" : "Enum";
+
+            try
+            {
+                // 1. Fetch
+                log.LogInfo($"Fetch: requesting data for {kind} '{graphName}'...");
+                var sheetRef = new SheetReference(
+                    graph.SheetId, graph.HeaderRowOffset, graph.SheetName);
+                var fetchResult = await provider.FetchAsync(sheetRef, cancellationToken);
+                if (fetchResult.IsFailure)
+                {
+                    log.LogError($"Fetch failed: {fetchResult.Error}");
+                    log.Complete(false);
+                    return false;
+                }
+
+                var tableData = fetchResult.Value;
+                log.LogInfo($"Fetch: {tableData.RowCount} rows");
+
+                // 2. Parse enum members
+                log.LogInfo($"Parse: extracting {kind} members...");
+                var parseResult = _parserEngine.Parse(tableData, graph);
+                if (parseResult.IsFailure)
+                {
+                    log.LogError($"Parse failed: {parseResult.Error}");
+                    log.Complete(false);
+                    return false;
+                }
+
+                foreach (var warning in parseResult.Value.ParseWarnings)
+                    log.LogWarning($"Parse: {warning.Message}");
+
+                var enumDef = parseResult.Value.Root as ParsedEnumDefinition;
+                if (enumDef == null)
+                {
+                    log.LogError("Parse produced unexpected result type.");
+                    log.Complete(false);
+                    return false;
+                }
+
+                log.LogInfo($"Parse: {enumDef.Members.Count} members found");
+
+                // 3. Generate C# enum
+                log.LogInfo($"Generate: creating {kind} source...");
+                var codeGen = new CodeGen.CodeGenerator();
+                var genResult = codeGen.GenerateEnum(enumDef);
+                if (genResult.IsFailure)
+                {
+                    log.LogError($"Generate failed: {genResult.Error}");
+                    log.Complete(false);
+                    return false;
+                }
+
+                var subfolder = isFlag ? "Flags" : "Enums";
+                var csPath = Path.Combine(outputBasePath, subfolder, $"{graphName}.cs");
+                EnsureDirectory(csPath);
+                File.WriteAllText(csPath, genResult.Value);
+                log.LogSuccess($"Generated: {subfolder}/{graphName}.cs ({enumDef.Members.Count} members)");
+
+                AssetDatabase.Refresh();
+                log.Complete(true);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                log.LogError($"{kind} pipeline failed: {ex.Message}");
+                log.Complete(false);
+                return false;
+            }
         }
 
         /// <summary>
