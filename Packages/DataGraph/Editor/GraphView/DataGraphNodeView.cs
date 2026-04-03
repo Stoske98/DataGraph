@@ -210,7 +210,7 @@ namespace DataGraph.Editor.GraphView
             {
                 RecordUndo("Change Property");
                 _nodeData.SetProperty(propKey, evt.newValue);
-                MarkDirty();
+                MarkDirtyDeferred();
             });
             container.Add(field);
         }
@@ -329,6 +329,14 @@ namespace DataGraph.Editor.GraphView
         {
             if (_graphView.GraphAsset != null)
                 EditorUtility.SetDirty(_graphView.GraphAsset);
+            _graphView.NotifyPropertyChanged();
+        }
+
+        private void MarkDirtyDeferred()
+        {
+            if (_graphView.GraphAsset != null)
+                EditorUtility.SetDirty(_graphView.GraphAsset);
+            _graphView.NotifyPropertyChangedDeferred();
         }
     }
 }

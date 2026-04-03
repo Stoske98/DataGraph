@@ -19,9 +19,35 @@ namespace DataGraph.Editor.GraphView
         private Vector2 _cachedMouseGraphPos;
 
         /// <summary>
-        /// Fired when edges or nodes are added/removed. Window subscribes to refresh JSON preview.
+        /// Fired when graph structure or node properties change.
+        /// Window subscribes to refresh JSON preview.
         /// </summary>
         public event Action OnGraphStructureChanged;
+
+        private IVisualElementScheduledItem _propertyChangedDebounce;
+
+        /// <summary>
+        /// Immediate notification — used for dropdown selections and structural changes.
+        /// </summary>
+        public void NotifyPropertyChanged()
+        {
+            _propertyChangedDebounce?.Pause();
+            OnGraphStructureChanged?.Invoke();
+        }
+
+        /// <summary>
+        /// Debounced notification — used for text field input.
+        /// Waits 300ms after the last keystroke before triggering refresh.
+        /// </summary>
+        public void NotifyPropertyChangedDeferred()
+        {
+            _propertyChangedDebounce?.Pause();
+            _propertyChangedDebounce = schedule.Execute(() =>
+            {
+                OnGraphStructureChanged?.Invoke();
+            });
+            _propertyChangedDebounce.ExecuteLater(300);
+        }
 
         public DataGraphAsset GraphAsset => _graphAsset;
 
