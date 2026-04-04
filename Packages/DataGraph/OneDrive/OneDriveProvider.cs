@@ -41,7 +41,8 @@ namespace DataGraph.OneDrive
                     OneDriveCredentials.TenantId);
 
                 return await fetcher.FetchAsync(
-                    descriptor, worksheetName, cancellationToken);
+                    descriptor, worksheetName, cancellationToken,
+                    reference.Columns);
             }
 
             if (IsShareLink(reference.SheetId))
@@ -64,6 +65,7 @@ namespace DataGraph.OneDrive
         private static async Task<Result<RawTableData>> FetchViaDirectDownloadAsync(
             string shareUrl, string worksheetName, CancellationToken ct)
         {
+            Debug.Log($"[DataGraph] OneDrive direct download: {shareUrl}");
             var downloadUrl = shareUrl +
                 (shareUrl.Contains("?") ? "&" : "?") + "download=1";
 

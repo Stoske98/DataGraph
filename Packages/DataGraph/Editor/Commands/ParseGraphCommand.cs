@@ -74,10 +74,15 @@ namespace DataGraph.Editor.Commands
                         graph, graphAsset, provider, outputBasePath, log, cancellationToken);
                 }
 
+                // Extract referenced columns for optimized fetching
+                var columns = ColumnExtractor.GetReferencedColumns(graph);
+                if (columns != null)
+                    log.LogInfo($"Fetch: optimized — requesting {columns.Count} columns: {string.Join(", ", columns)}");
+
                 // 2. Fetch
                 log.LogInfo($"Fetch: requesting data from sheet...");
                 var sheetRef = new SheetReference(
-                    graph.SheetId, graph.HeaderRowOffset, graph.SheetName);
+                    graph.SheetId, graph.HeaderRowOffset, graph.SheetName, columns);
                 var fetchResult = await provider.FetchAsync(sheetRef, cancellationToken);
                 if (fetchResult.IsFailure)
                 {
@@ -950,7 +955,6 @@ namespace DataGraph.Editor.Commands
 
             try
             {
-                // 1. Fetch
                 log.LogInfo($"Fetch: requesting data for {kind} '{graphName}'...");
                 var sheetRef = new SheetReference(
                     graph.SheetId, graph.HeaderRowOffset, graph.SheetName);
@@ -962,12 +966,10 @@ namespace DataGraph.Editor.Commands
                     return false;
                 }
 
-                var tableData = fetchResult.Value;
-                log.LogInfo($"Fetch: {tableData.RowCount} rows");
+                log.LogInfo($"Fetch: {fetchResult.Value.RowCount} rows");
 
-                // 2. Parse enum members
                 log.LogInfo($"Parse: extracting {kind} members...");
-                var parseResult = _parserEngine.Parse(tableData, graph);
+                var parseResult = _parserEngine.Parse(fetchResult.Value, graph);
                 if (parseResult.IsFailure)
                 {
                     log.LogError($"Parse failed: {parseResult.Error}");
@@ -988,7 +990,6 @@ namespace DataGraph.Editor.Commands
 
                 log.LogInfo($"Parse: {enumDef.Members.Count} members found");
 
-                // 3. Generate C# enum
                 log.LogInfo($"Generate: creating {kind} source...");
                 var codeGen = new CodeGen.CodeGenerator();
                 var genResult = codeGen.GenerateEnum(enumDef);

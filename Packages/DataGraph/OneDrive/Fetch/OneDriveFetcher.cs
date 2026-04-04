@@ -32,10 +32,13 @@ namespace DataGraph.OneDrive.Fetch
 
         /// <summary>
         /// Fetches worksheet data from an Excel file on OneDrive.
+        /// If columns is provided, fetches only those columns using
+        /// individual range requests and merges results.
         /// </summary>
         internal async Task<Result<RawTableData>> FetchAsync(
             string itemDescriptor, string worksheetName,
-            CancellationToken ct = default)
+            CancellationToken ct = default,
+            IReadOnlyList<string> columns = null)
         {
             var tokenResult = await EnsureAccessTokenAsync(ct);
             if (tokenResult.IsFailure)
@@ -45,7 +48,91 @@ namespace DataGraph.OneDrive.Fetch
             if (itemIdResult.IsFailure)
                 return Result<RawTableData>.Failure(itemIdResult.Error);
 
+            if (columns != null && columns.Count > 0)
+                return await FetchColumnsAsync(
+                    itemIdResult.Value, worksheetName, columns, ct);
+
             return await FetchUsedRangeAsync(itemIdResult.Value, worksheetName, ct);
+        }
+
+        /// <summary>
+        /// Fetches specific columns from a worksheet using individual range requests.
+        /// Each column is fetched as "{col}:{col}" range, then merged into full-width rows.
+        /// </summary>
+        private async Task<Result<RawTableData>> FetchColumnsAsync(
+            string itemId, string worksheetName, IReadOnlyList<string> columns,
+            CancellationToken ct)
+        {
+            var encodedSheet = Uri.EscapeDataString(worksheetName);
+
+            // Map column letters to indices
+            var columnIndices = new int[columns.Count];
+            int maxColIndex = 0;
+            for (int i = 0; i < columns.Count; i++)
+            {
+                columnIndices[i] = RawTableData.ColumnLetterToIndex(columns[i]);
+                if (columnIndices[i] > maxColIndex)
+                    maxColIndex = columnIndices[i];
+            }
+            int totalColumns = maxColIndex + 1;
+
+            // Fetch each column
+            var columnData = new List<string[]>[columns.Count];
+            int maxRowCount = 0;
+
+            for (int i = 0; i < columns.Count; i++)
+            {
+                var colLetter = columns[i];
+                var rangeAddress = $"{colLetter}:{colLetter}";
+                var url = $"{GraphBaseUrl}/me/drive/items/{itemId}" +
+                          $"/workbook/worksheets('{encodedSheet}')" +
+                          $"/range(address='{rangeAddress}')" +
+                          "?$select=values";
+
+                var response = await SendGraphRequestAsync(url, ct);
+                if (response.IsFailure)
+                    return Result<RawTableData>.Failure(
+                        $"Failed to fetch column {colLetter}: {response.Error}");
+
+                var values = ParseValuesArray(response.Value);
+                columnData[i] = values;
+                if (values.Count > maxRowCount)
+                    maxRowCount = values.Count;
+            }
+
+            if (maxRowCount == 0)
+                return Result<RawTableData>.Failure("All fetched columns are empty.");
+
+            // Merge into full-width rows
+            var allRows = new string[maxRowCount][];
+            for (int row = 0; row < maxRowCount; row++)
+            {
+                var rowData = new string[totalColumns];
+                for (int c = 0; c < totalColumns; c++)
+                    rowData[c] = "";
+
+                for (int i = 0; i < columns.Count; i++)
+                {
+                    var colRows = columnData[i];
+                    if (row < colRows.Count && colRows[row].Length > 0)
+                        rowData[columnIndices[i]] = colRows[row][0];
+                }
+
+                allRows[row] = rowData;
+            }
+
+            // First row is header, rest is data
+            if (maxRowCount < 2)
+                return Result<RawTableData>.Failure(
+                    "Fetched columns have only a header row but no data.");
+
+            var headers = allRows[0];
+            var dataRows = new string[maxRowCount - 1][];
+            for (int i = 1; i < maxRowCount; i++)
+                dataRows[i - 1] = allRows[i];
+
+            return Result<RawTableData>.Success(
+                new RawTableData(dataRows, headers));
         }
 
         /// <summary>

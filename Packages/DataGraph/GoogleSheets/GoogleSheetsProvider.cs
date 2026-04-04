@@ -123,7 +123,8 @@ namespace DataGraph.GoogleSheets
                 idResult.Value,
                 credResult.Value,
                 reference,
-                cancellationToken);
+                cancellationToken,
+                reference.Columns);
 
             if (fetchResult.IsSuccess)
                 _cache.Set(reference.SheetId, fetchResult.Value);
