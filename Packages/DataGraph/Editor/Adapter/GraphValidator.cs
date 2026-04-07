@@ -34,7 +34,7 @@ namespace DataGraph.Editor.Adapter
         {
             int rootCount = 0;
             foreach (var node in graph.Nodes)
-                if (NodeTypeRegistry.IsRootNode(node.TypeName))
+                if (NodeTypeRegistry.IsRoot(node.TypeName))
                     rootCount++;
 
             if (rootCount == 0)
@@ -51,7 +51,7 @@ namespace DataGraph.Editor.Adapter
 
             foreach (var node in graph.Nodes)
             {
-                if (NodeTypeRegistry.IsRootNode(node.TypeName)) continue;
+                if (NodeTypeRegistry.IsRoot(node.TypeName)) continue;
                 if (!connectedInputs.Contains(node.Guid))
                 {
                     var name = node.GetProperty("FieldName", node.TypeName);

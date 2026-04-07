@@ -13,9 +13,8 @@ MonoBehaviour:
   m_Name: DataGraphRegistry
   m_EditorClassIdentifier: DataGraph.Runtime::DataGraph.Runtime.DataGraphRegistry
   _soAssets:
-  - {fileID: 11400000, guid: a17c800ff141d7648abeaa9f76ff9c00, type: 2}
-  - {fileID: 11400000, guid: 8c30513fcbc4bf941b147b01b9a4b3b0, type: 2}
-  - {fileID: 11400000, guid: eb6c1992d856b48418931432041e2272, type: 2}
-  _blobEntries:
-  - builderTypeName: DataGraph.Data.HeroBlobDatabaseBuilder, Assembly-CSharp
-    blobFileName: Hero.blob
+  - {fileID: 11400000, guid: 36515743dc285b74b8c8633457e8b71d, type: 2}
+  - {fileID: 11400000, guid: 9d969f50eb635dd4ca0c58e5addf6343, type: 2}
+  - {fileID: 11400000, guid: f275554da6144904bbabc55e89334756, type: 2}
+  - {fileID: 11400000, guid: a45a977235ffc17418cd998740729d0c, type: 2}
+  _blobEntries: []

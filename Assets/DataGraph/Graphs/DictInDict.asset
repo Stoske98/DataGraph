@@ -1,0 +1,112 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 078ea1d5631c38f479ac166f80c4ad04, type: 3}
+  m_Name: DictInDict
+  m_EditorClassIdentifier: DataGraph.Editor::DataGraph.Editor.DataGraphAsset
+  _graphName: DictInDict
+  _sheetId: https://1drv.ms/x/c/2288ab75ad4712c2/IQCCBzvfQcpjS4rmgFnu1sZpARBfxdBf8qJNhA1aJZOzDbY
+  _sheetName: DictInDict
+  _headerRowOffset: 1
+  _graphType: 0
+  _nodes:
+  - _guid: 4e5f56c3-8f7a-4893-a2da-1cf989994936
+    _typeName: Root
+    _position: {x: -46, y: -42.5}
+    _isFixed: 1
+    _properties: []
+  - _guid: c94604f9-8882-48a2-9c03-4f4a23b0941a
+    _typeName: Dictionary
+    _position: {x: 74, y: -42.5}
+    _isFixed: 1
+    _properties:
+    - _key: KeyColumn
+      _value: A
+    - _key: KeyType
+      _value: String
+  - _guid: dd3fd43c-ec8b-4367-b284-6f0d02d25fdb
+    _typeName: Object
+    _position: {x: 314, y: -42.5}
+    _isFixed: 1
+    _properties:
+    - _key: TypeName
+      _value: Region
+  - _guid: 79643a0e-0ced-44f2-9792-861e772c08d0
+    _typeName: Dictionary
+    _position: {x: 583.3334, y: -42.666664}
+    _isFixed: 0
+    _properties:
+    - _key: KeyColumn
+      _value: B
+    - _key: KeyType
+      _value: String
+    - _key: FieldName
+      _value: cities
+  - _guid: 1117edf5-1c3f-4418-9c19-0c3c66a381b1
+    _typeName: Object
+    _position: {x: 838, y: -12.666667}
+    _isFixed: 0
+    _properties:
+    - _key: TypeName
+      _value: City
+  - _guid: f25cc1d9-8ec9-4f00-9868-c74d0df40197
+    _typeName: Dictionary
+    _position: {x: 1110.6666, y: -31.333334}
+    _isFixed: 0
+    _properties:
+    - _key: KeyColumn
+      _value: C
+    - _key: KeyType
+      _value: String
+    - _key: FieldName
+      _value: stats
+  - _guid: 8aad7806-64a9-4782-afea-c5d4ded27702
+    _typeName: NumberField
+    _position: {x: 1386.6666, y: -57.333332}
+    _isFixed: 0
+    _properties:
+    - _key: Column
+      _value: D
+    - _key: NumberType
+      _value: Int
+  _edges:
+  - _outputNodeGuid: 4e5f56c3-8f7a-4893-a2da-1cf989994936
+    _outputPortName: Children
+    _inputNodeGuid: c94604f9-8882-48a2-9c03-4f4a23b0941a
+    _inputPortName: Parent
+    _isFixed: 1
+  - _outputNodeGuid: c94604f9-8882-48a2-9c03-4f4a23b0941a
+    _outputPortName: Children
+    _inputNodeGuid: dd3fd43c-ec8b-4367-b284-6f0d02d25fdb
+    _inputPortName: Parent
+    _isFixed: 1
+  - _outputNodeGuid: dd3fd43c-ec8b-4367-b284-6f0d02d25fdb
+    _outputPortName: Children
+    _inputNodeGuid: 79643a0e-0ced-44f2-9792-861e772c08d0
+    _inputPortName: Parent
+    _isFixed: 0
+  - _outputNodeGuid: 79643a0e-0ced-44f2-9792-861e772c08d0
+    _outputPortName: Children
+    _inputNodeGuid: 1117edf5-1c3f-4418-9c19-0c3c66a381b1
+    _inputPortName: Parent
+    _isFixed: 0
+  - _outputNodeGuid: 1117edf5-1c3f-4418-9c19-0c3c66a381b1
+    _outputPortName: Children
+    _inputNodeGuid: f25cc1d9-8ec9-4f00-9868-c74d0df40197
+    _inputPortName: Parent
+    _isFixed: 0
+  - _outputNodeGuid: f25cc1d9-8ec9-4f00-9868-c74d0df40197
+    _outputPortName: Children
+    _inputNodeGuid: 8aad7806-64a9-4782-afea-c5d4ded27702
+    _inputPortName: Parent
+    _isFixed: 0
+  _cachedHeaders: []
+  _lastFetchTimeTicks: 0

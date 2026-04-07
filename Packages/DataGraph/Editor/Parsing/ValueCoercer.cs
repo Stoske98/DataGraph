@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+
 using DataGraph.Editor.Domain;
 using DataGraph.Runtime;
 
@@ -25,6 +26,7 @@ namespace DataGraph.Editor.Parsing
                 FieldValueType.String => Result<object>.Success(raw),
                 FieldValueType.Int => CoerceInt(raw),
                 FieldValueType.Float => CoerceFloat(raw),
+                FieldValueType.Double => CoerceDouble(raw),
                 FieldValueType.Bool => CoerceBool(raw),
                 FieldValueType.Vector2 => CoerceVector2(raw, field.Separator ?? ","),
                 FieldValueType.Vector3 => CoerceVector3(raw, field.Separator ?? ","),
@@ -44,6 +46,7 @@ namespace DataGraph.Editor.Parsing
                 FieldValueType.String => typeof(string),
                 FieldValueType.Int => typeof(int),
                 FieldValueType.Float => typeof(float),
+                FieldValueType.Double => typeof(double),
                 FieldValueType.Bool => typeof(bool),
                 FieldValueType.Vector2 => typeof(UnityEngine.Vector2),
                 FieldValueType.Vector3 => typeof(UnityEngine.Vector3),
@@ -60,6 +63,7 @@ namespace DataGraph.Editor.Parsing
                 FieldValueType.String => Result<object>.Success(string.Empty),
                 FieldValueType.Int => Result<object>.Success(0),
                 FieldValueType.Float => Result<object>.Success(0f),
+                FieldValueType.Double => Result<object>.Success(0d),
                 FieldValueType.Bool => Result<object>.Success(false),
                 FieldValueType.Vector2 => Result<object>.Success(UnityEngine.Vector2.zero),
                 FieldValueType.Vector3 => Result<object>.Success(UnityEngine.Vector3.zero),
@@ -85,6 +89,13 @@ namespace DataGraph.Editor.Parsing
             if (float.TryParse(raw.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out float value))
                 return Result<object>.Success(value);
             return Result<object>.Failure($"Cannot convert '{raw}' to float.");
+        }
+
+        private static Result<object> CoerceDouble(string raw)
+        {
+            if (double.TryParse(raw.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out double value))
+                return Result<object>.Success(value);
+            return Result<object>.Failure($"Cannot convert '{raw}' to double.");
         }
 
         private static Result<object> CoerceBool(string raw)

@@ -1,0 +1,30 @@
+{
+  "weapons": {
+    "items": [
+      {
+        "itemName": "Sword",
+        "itemPrice": 100
+      },
+      {
+        "itemName": "Axe",
+        "itemPrice": 150
+      }
+    ]
+  },
+  "armor": {
+    "items": [
+      {
+        "itemName": "Shield",
+        "itemPrice": 80
+      },
+      {
+        "itemName": "Helmet",
+        "itemPrice": 60
+      },
+      {
+        "itemName": "Boots",
+        "itemPrice": 40
+      }
+    ]
+  }
+}

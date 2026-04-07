@@ -1,0 +1,23 @@
+[
+  {
+    "buffs": {
+      "fire": {
+        "props": {
+          "damage": 10,
+          "speed": 5
+        }
+      },
+      "ice": {
+        "props": {
+          "damage": 8
+        }
+      },
+      "poison": {
+        "props": {
+          "damage": 15,
+          "duration": 3
+        }
+      }
+    }
+  }
+]

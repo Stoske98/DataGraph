@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Linq;
 using UnityEditor;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
@@ -9,8 +8,7 @@ namespace DataGraph.Editor.GraphView
 {
     /// <summary>
     /// Visual representation of a DataGraph node in the GraphView.
-    /// Ports use standard horizontal orientation in inputContainer/outputContainer.
-    /// Title is fixed per node type and does not change with property edits.
+    /// v2: Dynamic property controls based on parent context.
     /// </summary>
     internal sealed class DataGraphNodeView : Node
     {
@@ -18,325 +16,227 @@ namespace DataGraph.Editor.GraphView
         private readonly DataGraphView _graphView;
         private readonly Dictionary<string, Port> _inputPorts = new();
         private readonly Dictionary<string, Port> _outputPorts = new();
+        private VisualElement _propertyContainer;
 
         public string NodeGuid => _nodeData.Guid;
         public string NodeTypeName => _nodeData.TypeName;
+        public bool IsFixed => _nodeData.IsFixed;
 
         public DataGraphNodeView(SerializedNode nodeData, DataGraphView graphView)
         {
             _nodeData = nodeData;
             _graphView = graphView;
-
             title = NodeTypeRegistry.GetDisplayTitle(nodeData.TypeName);
             SetPosition(new Rect(nodeData.Position, new Vector2(200, 0)));
-
             ApplyHeaderColor();
             ApplyNodeStyle();
             CreatePorts();
-            CreatePropertyControls();
-
+            BuildPropertyControls();
             RefreshExpandedState();
             RefreshPorts();
+            if (nodeData.IsFixed) capabilities &= ~Capabilities.Deletable;
         }
 
-        public Port GetOutputPort(string portName)
+        public Port GetOutputPort(string portName) { _outputPorts.TryGetValue(portName, out var p); return p; }
+        public Port GetInputPort(string portName) { _inputPorts.TryGetValue(portName, out var p); return p; }
+
+        public void RefreshPropertyControls()
         {
-            _outputPorts.TryGetValue(portName, out var port);
-            return port;
+            if (_propertyContainer != null) extensionContainer.Remove(_propertyContainer);
+            BuildPropertyControls();
+            RefreshExpandedState();
         }
 
-        public Port GetInputPort(string portName)
-        {
-            _inputPorts.TryGetValue(portName, out var port);
-            return port;
-        }
-
-        private void ApplyHeaderColor()
-        {
-            var color = NodeTypeRegistry.GetNodeColor(_nodeData.TypeName);
-            titleContainer.style.backgroundColor = color;
-        }
+        private void ApplyHeaderColor() { titleContainer.style.backgroundColor = NodeTypeRegistry.GetNodeColor(_nodeData.TypeName); }
 
         private void ApplyNodeStyle()
         {
-            // Node body background
             mainContainer.style.backgroundColor = new Color(0.22f, 0.22f, 0.22f, 1f);
-
-            // Extension container background (where property controls live)
             extensionContainer.style.backgroundColor = new Color(0.2f, 0.2f, 0.2f, 1f);
-
-            // Border
-            style.borderTopWidth = 1;
-            style.borderBottomWidth = 1;
-            style.borderLeftWidth = 1;
-            style.borderRightWidth = 1;
-            style.borderTopColor = new Color(0.1f, 0.1f, 0.1f, 1f);
-            style.borderBottomColor = new Color(0.1f, 0.1f, 0.1f, 1f);
-            style.borderLeftColor = new Color(0.1f, 0.1f, 0.1f, 1f);
-            style.borderRightColor = new Color(0.1f, 0.1f, 0.1f, 1f);
+            var bc = new Color(0.1f, 0.1f, 0.1f, 1f);
+            style.borderTopWidth = style.borderBottomWidth = style.borderLeftWidth = style.borderRightWidth = 1;
+            style.borderTopColor = style.borderBottomColor = style.borderLeftColor = style.borderRightColor = bc;
         }
 
         private void CreatePorts()
         {
             if (NodeTypeRegistry.HasParentPort(_nodeData.TypeName))
             {
-                var inputPort = InstantiatePort(Orientation.Horizontal,
-                    Direction.Input, Port.Capacity.Single, typeof(bool));
-                inputPort.portName = "Parent";
-                _inputPorts["Parent"] = inputPort;
-                inputContainer.Add(inputPort);
+                var p = InstantiatePort(Orientation.Horizontal, Direction.Input, Port.Capacity.Single, typeof(bool));
+                p.portName = "Parent"; _inputPorts["Parent"] = p; inputContainer.Add(p);
             }
-
             if (NodeTypeRegistry.HasChildrenPort(_nodeData.TypeName))
             {
-                var outputPort = InstantiatePort(Orientation.Horizontal,
-                    Direction.Output, Port.Capacity.Multi, typeof(bool));
-                outputPort.portName = "Children";
-                _outputPorts["Children"] = outputPort;
-                outputContainer.Add(outputPort);
+                var cap = NodeTypeRegistry.IsMultiChildPort(_nodeData.TypeName) ? Port.Capacity.Multi : Port.Capacity.Single;
+                var p = InstantiatePort(Orientation.Horizontal, Direction.Output, cap, typeof(bool));
+                p.portName = "Children"; _outputPorts["Children"] = p; outputContainer.Add(p);
             }
         }
 
-        private void CreatePropertyControls()
+        private void BuildPropertyControls()
         {
-            var container = new VisualElement();
-            container.style.paddingLeft = 8;
-            container.style.paddingRight = 8;
-            container.style.paddingTop = 4;
-            container.style.paddingBottom = 4;
+            _propertyContainer = new VisualElement();
+            _propertyContainer.style.paddingLeft = 8;
+            _propertyContainer.style.paddingRight = 8;
+            _propertyContainer.style.paddingTop = 4;
+            _propertyContainer.style.paddingBottom = 4;
+
+            var parentType = _graphView.GraphAsset?.GetParentTypeName(_nodeData.Guid);
+            var showFieldName = NodeTypeRegistry.ShouldShowFieldName(parentType);
 
             switch (_nodeData.TypeName)
             {
-                // === ROOTS — TypeName comes from graph name, no editable field ===
-                case NodeTypeRegistry.Types.DictionaryRoot:
-                    AddColumnDropdown(container, "KeyColumn", "Key Column");
-                    AddEnumDropdown(container, "KeyType", "Key Type", new List<string> { "Int", "String" });
+                case NodeTypeRegistry.Types.Root:
                     break;
 
-                case NodeTypeRegistry.Types.ArrayRoot:
-                case NodeTypeRegistry.Types.ObjectRoot:
+                case NodeTypeRegistry.Types.Dictionary:
+                    if (showFieldName) AddTextField(_propertyContainer, "FieldName", "Field Name");
+                    AddColumnDropdown(_propertyContainer, "KeyColumn", "Key Column");
+                    AddEnumDropdown(_propertyContainer, "KeyType", "Key Type", new List<string> { "Int", "String" });
                     break;
 
-                case NodeTypeRegistry.Types.EnumRoot:
-                case NodeTypeRegistry.Types.FlagRoot:
-                    AddColumnDropdown(container, "NameColumn", "Name Column");
-                    AddColumnDropdown(container, "ValueColumn", "Value Column");
+                case NodeTypeRegistry.Types.VerticalArray:
+                    if (showFieldName) AddTextField(_propertyContainer, "FieldName", "Field Name");
+                    if (NodeTypeRegistry.ShouldShowIndexColumn(parentType))
+                        AddColumnDropdown(_propertyContainer, "IndexColumn", "Index Column");
                     break;
 
-                // === STRUCTURES (TypeName first, then FieldName) ===
-                case NodeTypeRegistry.Types.ObjectField:
-                    AddTextField(container, "TypeName", "Type Name");
-                    AddTextField(container, "FieldName", "Field Name");
+                case NodeTypeRegistry.Types.HorizontalArray:
+                    if (showFieldName) AddTextField(_propertyContainer, "FieldName", "Field Name");
+                    AddSeparatorDropdown(_propertyContainer, "Separator", "Separator");
                     break;
 
-                case NodeTypeRegistry.Types.VerticalArrayField:
-                    AddTextField(container, "TypeName", "Type Name");
-                    AddTextField(container, "FieldName", "Field Name");
-                    AddColumnDropdown(container, "IndexColumn", "Index Column");
+                case NodeTypeRegistry.Types.Object:
+                    AddTextField(_propertyContainer, "TypeName", "Type Name");
+                    if (showFieldName) AddTextField(_propertyContainer, "FieldName", "Field Name");
                     break;
 
-                case NodeTypeRegistry.Types.HorizontalArrayField:
-                    AddTextField(container, "FieldName", "Field Name");
-                    AddSeparatorDropdown(container, "Separator", "Separator");
+                case NodeTypeRegistry.Types.Enum:
+                    AddTextField(_propertyContainer, "TypeName", "Type Name");
+                    AddColumnDropdown(_propertyContainer, "NameColumn", "Name Column");
+                    AddColumnDropdown(_propertyContainer, "ValueColumn", "Value Column");
                     break;
 
-                case NodeTypeRegistry.Types.DictionaryField:
-                    AddTextField(container, "TypeName", "Type Name");
-                    AddTextField(container, "FieldName", "Field Name");
-                    AddColumnDropdown(container, "KeyColumn", "Key Column");
-                    AddEnumDropdown(container, "KeyType", "Key Type", new List<string> { "Int", "String" });
+                case NodeTypeRegistry.Types.Flag:
+                    AddTextField(_propertyContainer, "TypeName", "Type Name");
+                    AddColumnDropdown(_propertyContainer, "NameColumn", "Name Column");
+                    AddColumnDropdown(_propertyContainer, "ValueColumn", "Value Column");
                     break;
 
-                // === LEAVES ===
                 case NodeTypeRegistry.Types.StringField:
                 case NodeTypeRegistry.Types.BoolField:
-                    AddTextField(container, "FieldName", "Field Name");
-                    AddColumnDropdown(container, "Column", "Column");
+                    if (showFieldName) AddTextField(_propertyContainer, "FieldName", "Field Name");
+                    AddColumnDropdown(_propertyContainer, "Column", "Column");
                     break;
 
                 case NodeTypeRegistry.Types.NumberField:
-                    AddTextField(container, "FieldName", "Field Name");
-                    AddColumnDropdown(container, "Column", "Column");
-                    AddEnumDropdown(container, "NumberType", "Number Type",
-                        new List<string> { "Int", "Float", "Double" });
+                    if (showFieldName) AddTextField(_propertyContainer, "FieldName", "Field Name");
+                    AddColumnDropdown(_propertyContainer, "Column", "Column");
+                    AddEnumDropdown(_propertyContainer, "NumberType", "Number Type", new List<string> { "Int", "Float", "Double" });
                     break;
 
                 case NodeTypeRegistry.Types.Vector2Field:
                 case NodeTypeRegistry.Types.Vector3Field:
-                    AddTextField(container, "FieldName", "Field Name");
-                    AddColumnDropdown(container, "Column", "Column");
-                    AddSeparatorDropdown(container, "Separator", "Separator");
+                    if (showFieldName) AddTextField(_propertyContainer, "FieldName", "Field Name");
+                    AddColumnDropdown(_propertyContainer, "Column", "Column");
+                    AddSeparatorDropdown(_propertyContainer, "Separator", "Separator");
                     break;
 
                 case NodeTypeRegistry.Types.ColorField:
-                    AddTextField(container, "FieldName", "Field Name");
-                    AddColumnDropdown(container, "Column", "Column");
-                    AddEnumDropdown(container, "Format", "Format",
-                        new List<string> { "Hex", "RGBA" });
+                    if (showFieldName) AddTextField(_propertyContainer, "FieldName", "Field Name");
+                    AddColumnDropdown(_propertyContainer, "Column", "Column");
+                    AddEnumDropdown(_propertyContainer, "Format", "Format", new List<string> { "Hex", "RGBA" });
                     break;
 
                 case NodeTypeRegistry.Types.AssetField:
-                    AddTextField(container, "FieldName", "Field Name");
-                    AddColumnDropdown(container, "Column", "Column");
-                    AddEnumDropdown(container, "AssetType", "Asset Type",
-                        new List<string> { "Sprite", "Texture2D", "AudioClip", "GameObject",
-                            "Material", "AnimationClip", "RuntimeAnimatorController",
-                            "ScriptableObject", "Mesh", "Font", "TextAsset" });
+                    if (showFieldName) AddTextField(_propertyContainer, "FieldName", "Field Name");
+                    AddColumnDropdown(_propertyContainer, "Column", "Column");
+                    AddEnumDropdown(_propertyContainer, "AssetType", "Asset Type",
+                        new List<string> { "Sprite", "Texture2D", "AudioClip", "GameObject", "Material",
+                            "AnimationClip", "RuntimeAnimatorController", "ScriptableObject", "Mesh", "Font", "TextAsset" });
                     break;
 
                 case NodeTypeRegistry.Types.EnumField:
-                    AddTextField(container, "FieldName", "Field Name");
-                    AddColumnDropdown(container, "Column", "Column");
-                    AddGeneratedEnumDropdown(container, "EnumTypeName", "Enum Type", isFlag: false);
+                    if (showFieldName) AddTextField(_propertyContainer, "FieldName", "Field Name");
+                    AddColumnDropdown(_propertyContainer, "Column", "Column");
+                    AddGeneratedEnumDropdown(_propertyContainer, "EnumTypeName", "Enum Type", false);
                     break;
 
                 case NodeTypeRegistry.Types.FlagField:
-                    AddTextField(container, "FieldName", "Field Name");
-                    AddColumnDropdown(container, "Column", "Column");
-                    AddGeneratedEnumDropdown(container, "FlagTypeName", "Flag Type", isFlag: true);
-                    AddSeparatorDropdown(container, "Separator", "Separator");
+                    if (showFieldName) AddTextField(_propertyContainer, "FieldName", "Field Name");
+                    AddColumnDropdown(_propertyContainer, "Column", "Column");
+                    AddGeneratedEnumDropdown(_propertyContainer, "FlagTypeName", "Flag Type", true);
+                    AddSeparatorDropdown(_propertyContainer, "Separator", "Separator");
                     break;
             }
-
-            extensionContainer.Add(container);
+            extensionContainer.Add(_propertyContainer);
         }
 
-        private void AddTextField(VisualElement container, string propKey, string label)
+        private void AddTextField(VisualElement c, string key, string label)
         {
-            var current = _nodeData.GetProperty(propKey, "");
-            var field = new TextField(label) { value = current };
+            var field = new TextField(label) { value = _nodeData.GetProperty(key, "") };
             field.style.minWidth = 180;
-            field.RegisterValueChangedCallback(evt =>
-            {
-                RecordUndo("Change Property");
-                _nodeData.SetProperty(propKey, evt.newValue);
-                MarkDirtyDeferred();
-            });
-            container.Add(field);
+            field.RegisterValueChangedCallback(evt => { RecordUndo("Change Property"); _nodeData.SetProperty(key, evt.newValue); MarkDirtyDeferred(); });
+            c.Add(field);
         }
 
-        private void AddColumnDropdown(VisualElement container, string propKey, string label)
+        private void AddColumnDropdown(VisualElement c, string key, string label)
         {
             var choices = _graphView.GraphAsset?.GetColumnChoices() ?? new List<string> { "A" };
-            var current = _nodeData.GetProperty(propKey, choices.Count > 0 ? choices[0] : "A");
-
-            if (!choices.Contains(current))
-                choices.Insert(0, current);
-
-            var field = new PopupField<string>(label, choices, current);
-            field.RegisterValueChangedCallback(evt =>
-            {
-                RecordUndo("Change Column");
-                _nodeData.SetProperty(propKey, evt.newValue);
-                MarkDirty();
-            });
-            container.Add(field);
+            var cur = _nodeData.GetProperty(key, choices.Count > 0 ? choices[0] : "A");
+            if (!choices.Contains(cur)) choices.Insert(0, cur);
+            var field = new PopupField<string>(label, choices, cur);
+            field.RegisterValueChangedCallback(evt => { RecordUndo("Change Column"); _nodeData.SetProperty(key, evt.newValue); MarkDirty(); });
+            c.Add(field);
         }
 
-        private void AddSeparatorDropdown(VisualElement container, string propKey, string label)
+        private void AddSeparatorDropdown(VisualElement c, string key, string label)
         {
-            var options = new List<string>(NodeTypeRegistry.SeparatorOptions);
-            var current = _nodeData.GetProperty(propKey, ",");
-
-            if (!options.Contains(current))
-                options.Insert(0, current);
-
-            var field = new PopupField<string>(label, options, current);
-            field.RegisterValueChangedCallback(evt =>
-            {
-                RecordUndo("Change Separator");
-                _nodeData.SetProperty(propKey, evt.newValue);
-                MarkDirty();
-            });
-            container.Add(field);
+            var opts = new List<string>(NodeTypeRegistry.SeparatorOptions);
+            var cur = _nodeData.GetProperty(key, ",");
+            if (!opts.Contains(cur)) opts.Insert(0, cur);
+            var field = new PopupField<string>(label, opts, cur);
+            field.RegisterValueChangedCallback(evt => { RecordUndo("Change Separator"); _nodeData.SetProperty(key, evt.newValue); MarkDirty(); });
+            c.Add(field);
         }
 
-        private void AddEnumDropdown(VisualElement container, string propKey, string label,
-            List<string> options)
+        private void AddEnumDropdown(VisualElement c, string key, string label, List<string> opts)
         {
-            var current = _nodeData.GetProperty(propKey, options[0]);
-            if (!options.Contains(current))
-                options.Insert(0, current);
-
-            var field = new PopupField<string>(label, options, current);
-            field.RegisterValueChangedCallback(evt =>
-            {
-                RecordUndo("Change Option");
-                _nodeData.SetProperty(propKey, evt.newValue);
-                MarkDirty();
-            });
-            container.Add(field);
+            var cur = _nodeData.GetProperty(key, opts[0]);
+            if (!opts.Contains(cur)) opts.Insert(0, cur);
+            var field = new PopupField<string>(label, opts, cur);
+            field.RegisterValueChangedCallback(evt => { RecordUndo("Change Option"); _nodeData.SetProperty(key, evt.newValue); MarkDirty(); });
+            c.Add(field);
         }
 
-        private void AddGeneratedEnumDropdown(VisualElement container, string propKey,
-            string label, bool isFlag)
+        private void AddGeneratedEnumDropdown(VisualElement c, string key, string label, bool isFlag)
         {
             var choices = ScanGeneratedEnums(isFlag);
-            var current = _nodeData.GetProperty(propKey, "");
-
-            if (choices.Count == 0)
-                choices.Add("(none generated)");
-            if (!string.IsNullOrEmpty(current) && !choices.Contains(current))
-                choices.Insert(0, current);
-
-            var field = new PopupField<string>(label, choices,
-                string.IsNullOrEmpty(current) ? choices[0] : current);
-
-            if (choices.Count > 0)
-            {
-                _nodeData.SetProperty(propKey, choices[0]);
-            }
-
-            field.RegisterValueChangedCallback(evt =>
-            {
-                if (evt.newValue == "(none generated)") return;
-                RecordUndo("Change Enum Type");
-                _nodeData.SetProperty(propKey, evt.newValue);
-                MarkDirty();
-            });
-            container.Add(field);
+            var cur = _nodeData.GetProperty(key, "");
+            if (choices.Count == 0) choices.Add("(none generated)");
+            if (!string.IsNullOrEmpty(cur) && !choices.Contains(cur)) choices.Insert(0, cur);
+            var field = new PopupField<string>(label, choices, string.IsNullOrEmpty(cur) ? choices[0] : cur);
+            if (choices.Count > 0 && choices[0] != "(none generated)") _nodeData.SetProperty(key, choices[0]);
+            field.RegisterValueChangedCallback(evt => { if (evt.newValue == "(none generated)") return; RecordUndo("Change Enum Type"); _nodeData.SetProperty(key, evt.newValue); MarkDirty(); });
+            c.Add(field);
         }
 
         private static List<string> ScanGeneratedEnums(bool isFlag)
         {
             var result = new List<string>();
             var basePath = DataGraphSettings.Instance.Paths.GeneratedFolder;
-            var subfolder = isFlag ? "Flags" : "Enums";
-            var searchPath = $"{basePath}/{subfolder}";
-
-            if (!AssetDatabase.IsValidFolder(searchPath))
-                return result;
-
-            var guids = AssetDatabase.FindAssets("t:MonoScript",
-                new[] { searchPath });
-            foreach (var guid in guids)
+            var path = $"{basePath}/{(isFlag ? "Flags" : "Enums")}";
+            if (!AssetDatabase.IsValidFolder(path)) return result;
+            foreach (var guid in AssetDatabase.FindAssets("t:MonoScript", new[] { path }))
             {
-                var path = AssetDatabase.GUIDToAssetPath(guid);
-                var fileName = System.IO.Path.GetFileNameWithoutExtension(path);
-                if (!string.IsNullOrEmpty(fileName))
-                    result.Add(fileName);
+                var fn = System.IO.Path.GetFileNameWithoutExtension(AssetDatabase.GUIDToAssetPath(guid));
+                if (!string.IsNullOrEmpty(fn)) result.Add(fn);
             }
             return result;
         }
 
-        private void RecordUndo(string message)
-        {
-            if (_graphView.GraphAsset != null)
-                Undo.RecordObject(_graphView.GraphAsset, message);
-        }
-
-        private void MarkDirty()
-        {
-            if (_graphView.GraphAsset != null)
-                EditorUtility.SetDirty(_graphView.GraphAsset);
-            _graphView.NotifyPropertyChanged();
-        }
-
-        private void MarkDirtyDeferred()
-        {
-            if (_graphView.GraphAsset != null)
-                EditorUtility.SetDirty(_graphView.GraphAsset);
-            _graphView.NotifyPropertyChangedDeferred();
-        }
+        private void RecordUndo(string msg) { if (_graphView.GraphAsset != null) Undo.RecordObject(_graphView.GraphAsset, msg); }
+        private void MarkDirty() { if (_graphView.GraphAsset != null) EditorUtility.SetDirty(_graphView.GraphAsset); _graphView.NotifyPropertyChanged(); }
+        private void MarkDirtyDeferred() { if (_graphView.GraphAsset != null) EditorUtility.SetDirty(_graphView.GraphAsset); _graphView.NotifyPropertyChangedDeferred(); }
     }
 }

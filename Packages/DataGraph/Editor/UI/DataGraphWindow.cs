@@ -240,17 +240,21 @@ namespace DataGraph.Editor
             }
             EditorGUILayout.EndHorizontal();
 
-            // Row 2: format toggles
-            EditorGUILayout.BeginHorizontal();
-            GUILayout.Space(22);
-            entry.GenerateSO = GUILayout.Toggle(entry.GenerateSO, "SO", GUILayout.Width(34));
-            entry.GenerateJSON = GUILayout.Toggle(entry.GenerateJSON, "JSON", GUILayout.Width(52));
-            if (blobAvailable)
-                entry.GenerateBlob = GUILayout.Toggle(entry.GenerateBlob, "Blob", GUILayout.Width(42));
-            if (quantumAvailable)
-                entry.GenerateQuantum = GUILayout.Toggle(entry.GenerateQuantum, "Quantum", GUILayout.Width(68));
-            GUILayout.FlexibleSpace();
-            EditorGUILayout.EndHorizontal();
+            // Row 2: format toggles (not shown for Enum/Flag)
+            if (entry.GraphAsset.GraphType != GraphType.Enum &&
+                entry.GraphAsset.GraphType != GraphType.Flag)
+            {
+                EditorGUILayout.BeginHorizontal();
+                GUILayout.Space(22);
+                entry.GenerateSO = GUILayout.Toggle(entry.GenerateSO, "SO", GUILayout.Width(34));
+                entry.GenerateJSON = GUILayout.Toggle(entry.GenerateJSON, "JSON", GUILayout.Width(52));
+                if (blobAvailable)
+                    entry.GenerateBlob = GUILayout.Toggle(entry.GenerateBlob, "Blob", GUILayout.Width(42));
+                if (quantumAvailable)
+                    entry.GenerateQuantum = GUILayout.Toggle(entry.GenerateQuantum, "Quantum", GUILayout.Width(68));
+                GUILayout.FlexibleSpace();
+                EditorGUILayout.EndHorizontal();
+            }
 
             EditorGUILayout.EndVertical();
         }
@@ -538,12 +542,25 @@ namespace DataGraph.Editor
 
         private void CreateNewGraph()
         {
+            var menu = new GenericMenu();
+            menu.AddItem(new GUIContent("Dictionary"), false, () => DoCreateGraph(GraphType.Dictionary));
+            menu.AddItem(new GUIContent("Array"), false, () => DoCreateGraph(GraphType.Array));
+            menu.AddItem(new GUIContent("Object"), false, () => DoCreateGraph(GraphType.Object));
+            menu.AddSeparator("");
+            menu.AddItem(new GUIContent("Enum"), false, () => DoCreateGraph(GraphType.Enum));
+            menu.AddItem(new GUIContent("Flag"), false, () => DoCreateGraph(GraphType.Flag));
+            menu.ShowAsContext();
+        }
+
+        private void DoCreateGraph(GraphType graphType)
+        {
             var folder = DataGraphSettings.Instance.Paths.GraphsFolder;
             EnsureFolderExists(folder);
 
             var path = AssetDatabase.GenerateUniqueAssetPath($"{folder}/NewGraph.asset");
             var asset = CreateInstance<DataGraphAsset>();
-            asset.GraphName = Path.GetFileNameWithoutExtension(path);
+            asset.GraphType = graphType;
+            asset.InitializeStructure(Path.GetFileNameWithoutExtension(path));
             AssetDatabase.CreateAsset(asset, path);
             AssetDatabase.SaveAssets();
 

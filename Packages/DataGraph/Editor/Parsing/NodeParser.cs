@@ -198,7 +198,9 @@ namespace DataGraph.Editor.Parsing
 
                 previousIndex = currentIndex;
 
-                if (field.Children.Count == 1 && field.Children[0] is ParseableCustomField singleLeaf)
+                if (string.IsNullOrEmpty(field.TypeName)
+                    && field.Children.Count == 1
+                    && field.Children[0] is ParseableCustomField singleLeaf)
                 {
                     var leafResult = ParseCustomField(singleLeaf, currentRow);
                     elements.Add(leafResult.Node);
@@ -253,7 +255,9 @@ namespace DataGraph.Editor.Parsing
                     continue;
                 }
 
-                if (field.Children.Count == 1 && field.Children[0] is ParseableCustomField singleLeaf)
+                if (string.IsNullOrEmpty(field.TypeName)
+                    && field.Children.Count == 1
+                    && field.Children[0] is ParseableCustomField singleLeaf)
                 {
                     var leafResult = ParseCustomField(singleLeaf, currentRow);
                     entries[key] = leafResult.Node;
@@ -261,8 +265,9 @@ namespace DataGraph.Editor.Parsing
                 }
                 else
                 {
+                    int entryMaxRow = FindNextKeyRow(field.KeyColumn, currentRow + 1, maxRow);
                     var valueResult = ParseObjectChildren(
-                        field.TypeName, null, field.Children, currentRow, maxRow);
+                        field.TypeName, null, field.Children, currentRow, entryMaxRow);
                     entries[key] = valueResult.Node;
                     currentRow += valueResult.Depth;
                 }
@@ -275,6 +280,16 @@ namespace DataGraph.Editor.Parsing
             return new ElementParseResult(
                 new ParsedDictionary(field.FieldName, keyTypeName, field.TypeName, entries),
                 totalDepth);
+        }
+        private int FindNextKeyRow(string keyColumn, int startRow, int maxRow)
+        {
+            for (int row = startRow; row < maxRow; row++)
+            {
+                var val = _context.TableData.GetCell(row, keyColumn);
+                if (!string.IsNullOrEmpty(val))
+                    return row;
+            }
+            return maxRow;
         }
     }
 }

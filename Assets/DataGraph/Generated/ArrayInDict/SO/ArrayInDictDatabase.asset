@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 06ea21015051aef48973890dec844ec7, type: 3}
+  m_Name: ArrayInDictDatabase
+  m_EditorClassIdentifier: Assembly-CSharp::DataGraph.Data.ArrayInDictDatabase
+  _keys:
+  - weapons
+  - armor
+  _values:
+  - items:
+    - itemName: Sword
+      itemPrice: 100
+    - itemName: Axe
+      itemPrice: 150
+  - items:
+    - itemName: Shield
+      itemPrice: 80
+    - itemName: Helmet
+      itemPrice: 60
+    - itemName: Boots
+      itemPrice: 40
