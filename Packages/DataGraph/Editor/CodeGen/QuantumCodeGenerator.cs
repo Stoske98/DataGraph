@@ -329,7 +329,9 @@ namespace DataGraph.Editor.CodeGen
                 return "string";
             }
 
-            if (arr.Children.Count == 1 && arr.Children[0] is ParseableCustomField singleLeaf)
+            if (string.IsNullOrEmpty(arr.TypeName)
+                && arr.Children.Count == 1
+                && arr.Children[0] is ParseableCustomField singleLeaf)
                 return sim ? GetQuantumSimType(singleLeaf.ValueType) : GetQuantumViewType(singleLeaf.ValueType);
 
             return arr.TypeName + "QuantumEntry";
@@ -337,7 +339,9 @@ namespace DataGraph.Editor.CodeGen
 
         private string GetDictionaryValueQuantumType(ParseableDictionaryField dict, bool sim)
         {
-            if (dict.Children.Count == 1 && dict.Children[0] is ParseableCustomField singleLeaf)
+            if (string.IsNullOrEmpty(dict.TypeName)
+                && dict.Children.Count == 1
+                && dict.Children[0] is ParseableCustomField singleLeaf)
                 return sim ? GetQuantumSimType(singleLeaf.ValueType) : GetQuantumViewType(singleLeaf.ValueType);
 
             return dict.TypeName + "QuantumEntry";
@@ -345,6 +349,13 @@ namespace DataGraph.Editor.CodeGen
 
         private static bool HasStructuralChildren(ParseableNode node)
         {
+            var typeName = node switch
+            {
+                ParseableArrayField arr => arr.TypeName,
+                ParseableDictionaryField dict => dict.TypeName,
+                _ => null
+            };
+            if (!string.IsNullOrEmpty(typeName)) return node.Children.Count > 0;
             if (node.Children.Count == 1 && node.Children[0] is ParseableCustomField)
                 return false;
             return node.Children.Count > 0;

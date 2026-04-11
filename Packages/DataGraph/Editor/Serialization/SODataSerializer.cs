@@ -133,6 +133,13 @@ namespace DataGraph.Editor.Serialization
 
                 foreach (var child in obj.Children)
                 {
+                    if (child is ParsedDictionary dictChild)
+                    {
+                        // Dictionary is stored as parallel lists: {name}Keys + {name}Values
+                        PopulateDictionaryLists(instance, type, dictChild);
+                        continue;
+                    }
+
                     var field = type.GetField(child.FieldName,
                         BindingFlags.Public | BindingFlags.Instance);
                     if (field == null) continue;
@@ -149,6 +156,45 @@ namespace DataGraph.Editor.Serialization
                 return ConvertValue(type, val.Value);
 
             return null;
+        }
+
+        /// <summary>
+        /// Populates {fieldName}Keys and {fieldName}Values lists
+        /// for a Dictionary field that was code-generated as parallel lists.
+        /// </summary>
+        private void PopulateDictionaryLists(object instance, Type type, ParsedDictionary dict)
+        {
+            var keysField = type.GetField(dict.FieldName + "Keys",
+                BindingFlags.Public | BindingFlags.Instance);
+            var valuesField = type.GetField(dict.FieldName + "Values",
+                BindingFlags.Public | BindingFlags.Instance);
+
+            if (keysField == null || valuesField == null) return;
+
+            var keyType = keysField.FieldType.GetGenericArguments()[0];
+            var valueType = valuesField.FieldType.GetGenericArguments()[0];
+
+            var keysList = keysField.GetValue(instance) as IList
+                ?? (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(keyType));
+            var valuesList = valuesField.GetValue(instance) as IList
+                ?? (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(valueType));
+
+            foreach (var kvp in dict.Entries)
+            {
+                var key = ConvertValue(keyType, kvp.Key);
+                var value = kvp.Value is ParsedValue pv
+                    ? ConvertValue(valueType, pv.Value)
+                    : CreateAndPopulate(valueType, kvp.Value);
+
+                if (key != null)
+                {
+                    keysList.Add(key);
+                    valuesList.Add(value);
+                }
+            }
+
+            keysField.SetValue(instance, keysList);
+            valuesField.SetValue(instance, valuesList);
         }
 
         private object ResolveValue(Type fieldType, ParsedNode node)
@@ -183,19 +229,20 @@ namespace DataGraph.Editor.Serialization
 
                 case ParsedDictionary dict:
                 {
-                    if (!fieldType.IsGenericType) return null;
-                    var keyType = fieldType.GetGenericArguments()[0];
-                    var valueType = fieldType.GetGenericArguments()[1];
-                    var dictInstance = (IDictionary)Activator.CreateInstance(fieldType);
-                    foreach (var kvp in dict.Entries)
+                    // Dictionary fields are serialized as parallel lists:
+                    // {fieldName}Keys and {fieldName}Values
+                    // We don't populate the Dictionary field directly —
+                    // instead, the parent CreateAndPopulate handles it
+                    // by setting keysField and valuesField.
+                    // This case handles nested dict resolution.
+                    if (fieldType.IsGenericType && fieldType.GetGenericTypeDefinition() == typeof(Dictionary<,>))
                     {
-                        var key = ConvertValue(keyType, kvp.Key);
-                        var value = kvp.Value is ParsedValue pv
-                            ? ConvertValue(valueType, pv.Value)
-                            : CreateAndPopulate(valueType, kvp.Value);
-                        if (key != null) dictInstance[key] = value;
+                        // Runtime code uses a Dictionary property backed by lists.
+                        // At serialization time we just return null for the Dictionary field —
+                        // the lists are populated separately in CreateAndPopulate.
+                        return null;
                     }
-                    return dictInstance;
+                    return null;
                 }
 
                 default:

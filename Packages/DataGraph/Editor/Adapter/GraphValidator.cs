@@ -4,7 +4,8 @@ namespace DataGraph.Editor.Adapter
 {
     /// <summary>
     /// Validates DataGraph structure and reports issues.
-    /// Checks root count, connectivity, and column validity.
+    /// Checks root count, connectivity, required fields (TypeName, FieldName),
+    /// and column validity.
     /// </summary>
     internal sealed class GraphValidator
     {
@@ -26,6 +27,7 @@ namespace DataGraph.Editor.Adapter
             var result = new ValidationResult();
             ValidateRootNode(graph, result);
             ValidateConnectivity(graph, result);
+            ValidateRequiredFields(graph, result);
             ValidateColumns(graph, result);
             return result;
         }
@@ -54,8 +56,40 @@ namespace DataGraph.Editor.Adapter
                 if (NodeTypeRegistry.IsRoot(node.TypeName)) continue;
                 if (!connectedInputs.Contains(node.Guid))
                 {
-                    var name = node.GetProperty("FieldName", node.TypeName);
+                    var name = GetNodeDisplayName(node);
                     result.AddWarning($"Node '{name}' is not connected to a parent.");
+                }
+            }
+        }
+
+        private static void ValidateRequiredFields(DataGraphAsset graph, ValidationResult result)
+        {
+            foreach (var node in graph.Nodes)
+            {
+                if (NodeTypeRegistry.IsRoot(node.TypeName)) continue;
+
+                if (node.TypeName is NodeTypeRegistry.Types.Object
+                    or NodeTypeRegistry.Types.Enum
+                    or NodeTypeRegistry.Types.Flag)
+                {
+                    var typeName = node.GetProperty("TypeName", "");
+                    if (string.IsNullOrEmpty(typeName))
+                    {
+                        result.AddError(
+                            $"{NodeTypeRegistry.GetDisplayTitle(node.TypeName)} node is missing required Type Name.");
+                    }
+                }
+
+                var parentType = graph.GetParentTypeName(node.Guid);
+                if (NodeTypeRegistry.ShouldShowFieldName(parentType))
+                {
+                    var fieldName = node.GetProperty("FieldName", "");
+                    if (string.IsNullOrEmpty(fieldName))
+                    {
+                        var display = GetNodeDisplayName(node);
+                        result.AddError(
+                            $"Node '{display}' is missing required Field Name.");
+                    }
                 }
             }
         }
@@ -85,9 +119,18 @@ namespace DataGraph.Editor.Adapter
             if (value == null) return;
             if (!valid.Contains(value))
             {
-                var name = node.GetProperty("FieldName", node.GetProperty("TypeName", node.TypeName));
+                var name = GetNodeDisplayName(node);
                 result.AddWarning($"Node '{name}': column '{value}' not found in sheet headers.");
             }
+        }
+
+        private static string GetNodeDisplayName(SerializedNode node)
+        {
+            var fieldName = node.GetProperty("FieldName", "");
+            if (!string.IsNullOrEmpty(fieldName)) return fieldName;
+            var typeName = node.GetProperty("TypeName", "");
+            if (!string.IsNullOrEmpty(typeName)) return typeName;
+            return NodeTypeRegistry.GetDisplayTitle(node.TypeName);
         }
     }
 }

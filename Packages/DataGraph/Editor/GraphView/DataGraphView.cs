@@ -25,7 +25,7 @@ namespace DataGraph.Editor.GraphView
         {
             _propertyChangedDebounce?.Pause();
             _propertyChangedDebounce = schedule.Execute(() => OnGraphStructureChanged?.Invoke());
-            _propertyChangedDebounce.ExecuteLater(300);
+            _propertyChangedDebounce.ExecuteLater(600);
         }
 
         public DataGraphAsset GraphAsset => _graphAsset;

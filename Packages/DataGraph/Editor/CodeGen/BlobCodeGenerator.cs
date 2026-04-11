@@ -160,9 +160,9 @@ namespace DataGraph.Editor.CodeGen
                     break;
 
                 case ParseableDictionaryField dict:
-                    var keyType = TypeMapper.GetKeyTypeName(dict.KeyType);
+                    var keyBlobType = dict.KeyType == KeyType.String ? "BlobString" : "int";
                     var valueType = GetDictionaryValueBlobType(dict);
-                    w.Line($"public BlobArray<{keyType}> {dict.FieldName}Keys;");
+                    w.Line($"public BlobArray<{keyBlobType}> {dict.FieldName}Keys;");
                     w.Line($"public BlobArray<{valueType}> {dict.FieldName}Values;");
                     break;
             }
@@ -200,12 +200,13 @@ namespace DataGraph.Editor.CodeGen
                 case ParseableDictionaryRoot dict:
                 {
                     var entryBlob = dict.TypeName + "Blob";
-                    var keyType = TypeMapper.GetKeyTypeName(dict.KeyType);
+                    var keyBlobType = dict.KeyType == KeyType.String ? "BlobString" : "int";
+                    var keyParamType = TypeMapper.GetKeyTypeName(dict.KeyType);
                     w.BeginBlock($"public struct {dbName}");
-                    w.Line($"public BlobArray<{keyType}> keys;");
+                    w.Line($"public BlobArray<{keyBlobType}> keys;");
                     w.Line($"public BlobArray<{entryBlob}> values;");
                     w.BlankLine();
-                    w.BeginBlock($"public ref {entryBlob} GetById({keyType} key)");
+                    w.BeginBlock($"public ref {entryBlob} GetById({keyParamType} key)");
                     w.Line("int lo = 0, hi = keys.Length - 1;");
                     w.Line("while (lo <= hi)");
                     w.BeginBlock("");
@@ -313,10 +314,13 @@ namespace DataGraph.Editor.CodeGen
 
             switch (root)
             {
-                case ParseableDictionaryRoot:
+                case ParseableDictionaryRoot dict:
                     w.Line($"var handle = new BlobDatabaseHandle<{entryBlob}, {dbName}>(");
                     w.Line($"    blobRef,");
-                    w.Line($"    getById: (ref {dbName} db, int key) => ref db.GetById(key));");
+                    if (dict.KeyType == KeyType.Int)
+                        w.Line($"    getById: (ref {dbName} db, int key) => ref db.GetById(key));");
+                    else
+                        w.Line($"    getByStringId: (ref {dbName} db, string key) => ref db.GetById(key));");
                     break;
                 case ParseableArrayRoot:
                     w.Line($"var handle = new BlobDatabaseHandle<{entryBlob}, {dbName}>(");
@@ -346,7 +350,10 @@ namespace DataGraph.Editor.CodeGen
             w.BlankLine();
             w.Line("var keysBuilder = builder.Allocate(ref dbRoot.keys, keys.Length);");
             w.Line("for (int i = 0; i < keys.Length; i++)");
-            w.Line("    keysBuilder[i] = keys[i];");
+            if (root.KeyType == KeyType.String)
+                w.Line("    builder.AllocateString(ref keysBuilder[i], keys[i] ?? \"\");");
+            else
+                w.Line("    keysBuilder[i] = keys[i];");
             w.BlankLine();
             w.Line("var valuesBuilder = builder.Allocate(ref dbRoot.values, values.Length);");
             w.Line("for (int i = 0; i < values.Length; i++)");
@@ -516,7 +523,7 @@ namespace DataGraph.Editor.CodeGen
             w.Line($"for (int {iterVar} = 0; {iterVar} < {source}.{fieldName}.Length; {iterVar}++)");
             w.BeginBlock("");
 
-            if (arr.Children.Count == 1 && arr.Children[0] is ParseableCustomField leaf)
+            if (string.IsNullOrEmpty(arr.TypeName) && arr.Children.Count == 1 && arr.Children[0] is ParseableCustomField leaf)
             {
                 if (leaf.ValueType == FieldValueType.String)
                     w.Line($"builder.AllocateString(ref _{fieldName}Builder[{iterVar}], {source}.{fieldName}[{iterVar}] ?? \"\");");
@@ -541,13 +548,16 @@ namespace DataGraph.Editor.CodeGen
             w.BeginBlock("");
             w.Line($"var _{fieldName}KeysBuilder = builder.Allocate(ref {target}.{fieldName}Keys, {source}.{fieldName}Keys.Length);");
             w.Line($"for (int {iterVar} = 0; {iterVar} < {source}.{fieldName}Keys.Length; {iterVar}++)");
-            w.Line($"    _{fieldName}KeysBuilder[{iterVar}] = {source}.{fieldName}Keys[{iterVar}];");
+            if (dict.KeyType == KeyType.String)
+                w.Line($"    builder.AllocateString(ref _{fieldName}KeysBuilder[{iterVar}], {source}.{fieldName}Keys[{iterVar}] ?? \"\");");
+            else
+                w.Line($"    _{fieldName}KeysBuilder[{iterVar}] = {source}.{fieldName}Keys[{iterVar}];");
             w.BlankLine();
             w.Line($"var _{fieldName}ValsBuilder = builder.Allocate(ref {target}.{fieldName}Values, {source}.{fieldName}Values.Length);");
             w.Line($"for (int {iterVar}v = 0; {iterVar}v < {source}.{fieldName}Values.Length; {iterVar}v++)");
             w.BeginBlock("");
 
-            if (dict.Children.Count == 1 && dict.Children[0] is ParseableCustomField leaf)
+            if (string.IsNullOrEmpty(dict.TypeName) && dict.Children.Count == 1 && dict.Children[0] is ParseableCustomField leaf)
             {
                 if (leaf.ValueType == FieldValueType.String)
                     w.Line($"builder.AllocateString(ref _{fieldName}ValsBuilder[{iterVar}v], {source}.{fieldName}Values[{iterVar}v] ?? \"\");");
@@ -590,7 +600,7 @@ namespace DataGraph.Editor.CodeGen
                 return "BlobString";
             }
 
-            if (arr.Children.Count == 1 && arr.Children[0] is ParseableCustomField singleLeaf)
+            if (string.IsNullOrEmpty(arr.TypeName) && arr.Children.Count == 1 && arr.Children[0] is ParseableCustomField singleLeaf)
                 return GetBlobTypeName(singleLeaf.ValueType);
 
             return arr.TypeName + "Blob";
@@ -605,7 +615,7 @@ namespace DataGraph.Editor.CodeGen
                 return "string";
             }
 
-            if (arr.Children.Count == 1 && arr.Children[0] is ParseableCustomField singleLeaf)
+            if (string.IsNullOrEmpty(arr.TypeName) && arr.Children.Count == 1 && arr.Children[0] is ParseableCustomField singleLeaf)
                 return singleLeaf.ValueType == FieldValueType.String ? "string" : GetBlobTypeName(singleLeaf.ValueType);
 
             return arr.TypeName + "BlobSource";
@@ -613,7 +623,7 @@ namespace DataGraph.Editor.CodeGen
 
         private string GetDictionaryValueBlobType(ParseableDictionaryField dict)
         {
-            if (dict.Children.Count == 1 && dict.Children[0] is ParseableCustomField singleLeaf)
+            if (string.IsNullOrEmpty(dict.TypeName) && dict.Children.Count == 1 && dict.Children[0] is ParseableCustomField singleLeaf)
                 return GetBlobTypeName(singleLeaf.ValueType);
 
             return dict.TypeName + "Blob";
@@ -621,7 +631,7 @@ namespace DataGraph.Editor.CodeGen
 
         private string GetDictionaryValueSourceType(ParseableDictionaryField dict)
         {
-            if (dict.Children.Count == 1 && dict.Children[0] is ParseableCustomField singleLeaf)
+            if (string.IsNullOrEmpty(dict.TypeName) && dict.Children.Count == 1 && dict.Children[0] is ParseableCustomField singleLeaf)
                 return singleLeaf.ValueType == FieldValueType.String ? "string" : GetBlobTypeName(singleLeaf.ValueType);
 
             return dict.TypeName + "BlobSource";
@@ -629,6 +639,13 @@ namespace DataGraph.Editor.CodeGen
 
         private static bool HasStructuralChildren(ParseableNode node)
         {
+            var typeName = node switch
+            {
+                ParseableArrayField arr => arr.TypeName,
+                ParseableDictionaryField dict => dict.TypeName,
+                _ => null
+            };
+            if (!string.IsNullOrEmpty(typeName)) return node.Children.Count > 0;
             if (node.Children.Count == 1 && node.Children[0] is ParseableCustomField)
                 return false;
             return node.Children.Count > 0;

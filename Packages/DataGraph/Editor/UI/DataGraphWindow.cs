@@ -240,21 +240,17 @@ namespace DataGraph.Editor
             }
             EditorGUILayout.EndHorizontal();
 
-            // Row 2: format toggles (not shown for Enum/Flag)
-            if (entry.GraphAsset.GraphType != GraphType.Enum &&
-                entry.GraphAsset.GraphType != GraphType.Flag)
-            {
-                EditorGUILayout.BeginHorizontal();
-                GUILayout.Space(22);
-                entry.GenerateSO = GUILayout.Toggle(entry.GenerateSO, "SO", GUILayout.Width(34));
-                entry.GenerateJSON = GUILayout.Toggle(entry.GenerateJSON, "JSON", GUILayout.Width(52));
-                if (blobAvailable)
-                    entry.GenerateBlob = GUILayout.Toggle(entry.GenerateBlob, "Blob", GUILayout.Width(42));
-                if (quantumAvailable)
-                    entry.GenerateQuantum = GUILayout.Toggle(entry.GenerateQuantum, "Quantum", GUILayout.Width(68));
-                GUILayout.FlexibleSpace();
-                EditorGUILayout.EndHorizontal();
-            }
+            // Row 2: format toggles
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Space(22);
+            entry.GenerateSO = GUILayout.Toggle(entry.GenerateSO, "SO", GUILayout.Width(34));
+            entry.GenerateJSON = GUILayout.Toggle(entry.GenerateJSON, "JSON", GUILayout.Width(52));
+            if (blobAvailable)
+                entry.GenerateBlob = GUILayout.Toggle(entry.GenerateBlob, "Blob", GUILayout.Width(42));
+            if (quantumAvailable)
+                entry.GenerateQuantum = GUILayout.Toggle(entry.GenerateQuantum, "Quantum", GUILayout.Width(68));
+            GUILayout.FlexibleSpace();
+            EditorGUILayout.EndHorizontal();
 
             EditorGUILayout.EndVertical();
         }
@@ -657,10 +653,34 @@ namespace DataGraph.Editor
 
             try
             {
+                var validator = new GraphValidator();
                 var command = new ParseGraphCommand();
+
                 foreach (var entry in selected)
                 {
                     if (_cts.Token.IsCancellationRequested) break;
+
+                    // Validate graph before parsing
+                    var validation = validator.Validate(entry.GraphAsset);
+                    if (!validation.IsValid)
+                    {
+                        var g = _console.BeginGroup(entry.DisplayName);
+                        foreach (var err in validation.Errors)
+                            g.LogError(err);
+                        foreach (var warn in validation.Warnings)
+                            g.LogWarning(warn);
+                        g.Complete(false);
+                        continue;
+                    }
+
+                    // Log warnings even if valid
+                    if (validation.Warnings.Count > 0)
+                    {
+                        var warnGroup = _console.BeginGroup(entry.DisplayName + " (warnings)");
+                        foreach (var warn in validation.Warnings)
+                            warnGroup.LogWarning(warn);
+                        warnGroup.Complete(true);
+                    }
 
                     var provider = ResolveProviderForGraph(entry.GraphAsset.SheetId);
                     if (provider == null)
@@ -711,10 +731,22 @@ namespace DataGraph.Editor
 
             try
             {
+                var validator = new GraphValidator();
                 var command = new ParseGraphCommand();
+
                 foreach (var entry in selected)
                 {
                     if (_cts.Token.IsCancellationRequested) break;
+
+                    var validation = validator.Validate(entry.GraphAsset);
+                    if (!validation.IsValid)
+                    {
+                        var g = _console.BeginGroup(entry.DisplayName);
+                        foreach (var err in validation.Errors)
+                            g.LogError(err);
+                        g.Complete(false);
+                        continue;
+                    }
 
                     var provider = ResolveProviderForGraph(entry.GraphAsset.SheetId);
                     if (provider == null) continue;

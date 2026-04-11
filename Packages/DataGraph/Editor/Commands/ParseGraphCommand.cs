@@ -683,6 +683,12 @@ namespace DataGraph.Editor.Commands
             {
                 foreach (var child in obj.Children)
                 {
+                    if (child is Domain.ParsedDictionary childDict)
+                    {
+                        PopulateQuantumDictLists(entryType, childDict, instance);
+                        continue;
+                    }
+
                     var field = entryType.GetField(child.FieldName,
                         System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
                     if (field == null) continue;
@@ -693,11 +699,10 @@ namespace DataGraph.Editor.Commands
                         Domain.ParsedAssetReference assetRef => ConvertQuantumAsset(field.FieldType, assetRef),
                         Domain.ParsedObject childObj => PopulateQuantumEntry(field.FieldType, childObj, null),
                         Domain.ParsedArray childArr => PopulateQuantumList(field.FieldType, childArr),
-                        Domain.ParsedDictionary childDict => PopulateQuantumDict(field, childDict, instance),
                         _ => null
                     };
 
-                    if (value != null && child is not Domain.ParsedDictionary)
+                    if (value != null)
                         field.SetValue(instance, value);
                 }
             }
@@ -726,17 +731,16 @@ namespace DataGraph.Editor.Commands
             return list;
         }
 
-        private static object PopulateQuantumDict(System.Reflection.FieldInfo field,
+        private static void PopulateQuantumDictLists(Type entryType,
             Domain.ParsedDictionary dict, object instance)
         {
-            var entryType = instance.GetType();
-            var keysField = entryType.GetField(field.Name + "Keys");
-            var valuesField = entryType.GetField(field.Name + "Values");
-            if (keysField == null || valuesField == null) return null;
+            var keysField = entryType.GetField(dict.FieldName + "Keys");
+            var valuesField = entryType.GetField(dict.FieldName + "Values");
+            if (keysField == null || valuesField == null) return;
 
             var keysList = (System.Collections.IList)keysField.GetValue(instance);
             var valuesList = (System.Collections.IList)valuesField.GetValue(instance);
-            if (keysList == null || valuesList == null) return null;
+            if (keysList == null || valuesList == null) return;
 
             var valueElementType = valuesField.FieldType.GetGenericArguments()[0];
 
@@ -753,8 +757,6 @@ namespace DataGraph.Editor.Commands
                 };
                 if (value != null) valuesList.Add(value);
             }
-
-            return null;
         }
 
         private static object ConvertQuantumValue(Type targetType, object value)
@@ -829,6 +831,12 @@ namespace DataGraph.Editor.Commands
             {
                 foreach (var child in obj.Children)
                 {
+                    if (child is Domain.ParsedDictionary childDict)
+                    {
+                        PopulateSourceDictLists(sourceType, childDict, instance);
+                        continue;
+                    }
+
                     var field = sourceType.GetField(child.FieldName,
                         System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
                     if (field == null) continue;
@@ -848,6 +856,50 @@ namespace DataGraph.Editor.Commands
             }
 
             return instance;
+        }
+
+        /// <summary>
+        /// Populates {fieldName}Keys and {fieldName}Values arrays on a BlobSource struct
+        /// from a ParsedDictionary.
+        /// </summary>
+        private static void PopulateSourceDictLists(Type sourceType,
+            Domain.ParsedDictionary dict, object instance)
+        {
+            var keysField = sourceType.GetField(dict.FieldName + "Keys",
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            var valuesField = sourceType.GetField(dict.FieldName + "Values",
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            if (keysField == null || valuesField == null) return;
+
+            var keyElementType = keysField.FieldType.GetElementType() ?? typeof(string);
+            var valueElementType = valuesField.FieldType.GetElementType() ?? typeof(object);
+
+            var keysList = new System.Collections.Generic.List<object>();
+            var valuesList = new System.Collections.Generic.List<object>();
+
+            foreach (var kvp in dict.Entries)
+            {
+                var key = ConvertForSource(keyElementType, kvp.Key);
+                if (key != null) keysList.Add(key);
+
+                object value = kvp.Value switch
+                {
+                    Domain.ParsedValue val => ConvertForSource(valueElementType, val.Value),
+                    Domain.ParsedObject obj => PopulateSource(valueElementType, obj),
+                    _ => null
+                };
+                valuesList.Add(value);
+            }
+
+            var keysArray = Array.CreateInstance(keyElementType, keysList.Count);
+            for (int i = 0; i < keysList.Count; i++)
+                keysArray.SetValue(keysList[i], i);
+            keysField.SetValue(instance, keysArray);
+
+            var valuesArray = Array.CreateInstance(valueElementType, valuesList.Count);
+            for (int i = 0; i < valuesList.Count; i++)
+                if (valuesList[i] != null) valuesArray.SetValue(valuesList[i], i);
+            valuesField.SetValue(instance, valuesArray);
         }
 
         private static Array PopulateSourceArray(Type fieldType, Domain.ParsedArray arr)
