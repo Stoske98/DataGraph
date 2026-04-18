@@ -13,13 +13,7 @@ MonoBehaviour:
   m_Name: DataGraphRegistry
   m_EditorClassIdentifier: DataGraph.Runtime::DataGraph.Runtime.DataGraphRegistry
   _soAssets:
-  - {fileID: 11400000, guid: a45a977235ffc17418cd998740729d0c, type: 2}
-  - {fileID: 11400000, guid: 607cfe584d83b7445b3cb775016bbbe3, type: 2}
-  - {fileID: 11400000, guid: f275554da6144904bbabc55e89334756, type: 2}
+  - {fileID: 11400000, guid: 42f1ae6a55506344bbf91a15f8c41784, type: 2}
   _blobEntries:
-  - builderTypeName: DataGraph.Data.DictInDictBlobDatabaseBuilder, Assembly-CSharp
-    blobFileName: DictInDict.blob
-  - builderTypeName: DataGraph.Data.ArrayInDictBlobDatabaseBuilder, Assembly-CSharp
-    blobFileName: ArrayInDict.blob
-  - builderTypeName: DataGraph.Data.DictInArrayBlobDatabaseBuilder, Assembly-CSharp
-    blobFileName: DictInArray.blob
+  - builderTypeName: DataGraph.Data.HeroGraphBlobDatabaseBuilder, Assembly-CSharp
+    blobFileName: HeroGraph.blob

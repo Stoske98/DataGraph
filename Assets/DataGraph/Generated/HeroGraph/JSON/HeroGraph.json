@@ -1,0 +1,29 @@
+{
+  "1": {
+    "name": "rados",
+    "attribute": "Agility",
+    "stat": {
+      "mana": 100,
+      "hp": 250
+    },
+    "flag": "Agility | Strenght"
+  },
+  "2": {
+    "name": "srdjan",
+    "attribute": "Strenght",
+    "stat": {
+      "mana": 50,
+      "hp": 300
+    },
+    "flag": "Agility | Universal | Strenght"
+  },
+  "3": {
+    "name": "jovan",
+    "attribute": "Universal",
+    "stat": {
+      "mana": 40,
+      "hp": 500
+    },
+    "flag": "Strenght"
+  }
+}

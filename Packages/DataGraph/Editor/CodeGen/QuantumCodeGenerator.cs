@@ -109,6 +109,12 @@ namespace DataGraph.Editor.CodeGen
                 case ParseableCustomField custom:
                     w.Line($"public {GetQuantumSimType(custom.ValueType)} {custom.FieldName};");
                     break;
+                case ParseableEnumField enumField:
+                    w.Line($"public {enumField.EnumTypeName} {enumField.FieldName};");
+                    break;
+                case ParseableFlagField flagField:
+                    w.Line($"public {flagField.FlagTypeName} {flagField.FieldName};");
+                    break;
                 case ParseableObjectField obj:
                     w.Line($"public {obj.TypeName}QuantumEntry {obj.FieldName};");
                     break;
@@ -272,6 +278,8 @@ namespace DataGraph.Editor.CodeGen
             return node switch
             {
                 ParseableCustomField custom => IsSimSafeType(custom.ValueType),
+                ParseableEnumField => true,
+                ParseableFlagField => true,
                 ParseableObjectField => true,
                 ParseableArrayField => true,
                 ParseableDictionaryField => true,

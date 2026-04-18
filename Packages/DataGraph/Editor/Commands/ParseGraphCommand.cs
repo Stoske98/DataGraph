@@ -858,10 +858,6 @@ namespace DataGraph.Editor.Commands
             return instance;
         }
 
-        /// <summary>
-        /// Populates {fieldName}Keys and {fieldName}Values arrays on a BlobSource struct
-        /// from a ParsedDictionary.
-        /// </summary>
         private static void PopulateSourceDictLists(Type sourceType,
             Domain.ParsedDictionary dict, object instance)
         {
@@ -930,9 +926,27 @@ namespace DataGraph.Editor.Commands
             if (targetType == typeof(float)) return Convert.ToSingle(value);
             if (targetType == typeof(double)) return Convert.ToDouble(value);
             if (targetType == typeof(bool)) return Convert.ToBoolean(value);
+            if (targetType.IsEnum) return ParseEnumValue(targetType, value.ToString());
 
             try { return Convert.ChangeType(value, targetType, System.Globalization.CultureInfo.InvariantCulture); }
             catch { return targetType.IsValueType ? Activator.CreateInstance(targetType) : null; }
+        }
+
+        /// <summary>
+        /// Parses an enum value from a string. Handles [Flags] enums by splitting
+        /// on any separator (| ; ,), trimming each part, and combining with comma
+        /// for Enum.Parse.
+        /// </summary>
+        private static object ParseEnumValue(Type enumType, string raw)
+        {
+            if (string.IsNullOrEmpty(raw))
+                return Activator.CreateInstance(enumType);
+
+            var parts = raw.Split(new[] { '|', ';', ',' }, StringSplitOptions.RemoveEmptyEntries);
+            for (int i = 0; i < parts.Length; i++)
+                parts[i] = parts[i].Trim();
+
+            return Enum.Parse(enumType, string.Join(", ", parts), true);
         }
 
         private static string GetRootTypeName(Domain.ParseableNode root)
@@ -1053,10 +1067,16 @@ namespace DataGraph.Editor.Commands
                 }
 
                 var subfolder = isFlag ? "Flags" : "Enums";
-                var csPath = Path.Combine(outputBasePath, subfolder, $"{graphName}.cs");
+                string csPath;
+
+                if (ProviderRegistry.IsQuantumAvailable())
+                    csPath = $"Assets/QuantumUser/Simulation/DataGraph/{subfolder}/{enumDef.TypeName}.cs";
+                else
+                    csPath = Path.Combine(outputBasePath, subfolder, $"{enumDef.TypeName}.cs");
+
                 EnsureDirectory(csPath);
                 File.WriteAllText(csPath, genResult.Value);
-                log.LogSuccess($"Generated: {subfolder}/{graphName}.cs ({enumDef.Members.Count} members)");
+                log.LogSuccess($"Generated: {csPath} ({enumDef.Members.Count} members)");
 
                 AssetDatabase.Refresh();
                 log.Complete(true);

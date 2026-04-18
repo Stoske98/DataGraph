@@ -570,14 +570,44 @@ namespace DataGraph.Editor
                 ? entry.GraphAsset.GraphName
                 : Path.GetFileNameWithoutExtension(entry.AssetPath);
 
+            var graphType = entry.GraphAsset.GraphType;
+
+            // 1. Delete main generated folder (SO, JSON, Blob code, Blob data)
             var generatedFolder = Path.Combine(OutputPath, graphName);
             if (AssetDatabase.IsValidFolder(generatedFolder))
                 AssetDatabase.DeleteAsset(generatedFolder);
 
+            // 2. Delete Quantum generated folder
             var quantumFolder = $"Assets/QuantumUser/Simulation/DataGraph/{graphName}";
             if (AssetDatabase.IsValidFolder(quantumFolder))
                 AssetDatabase.DeleteAsset(quantumFolder);
 
+            // 3. Delete Enum/Flag generated files
+            if (graphType == GraphType.Enum || graphType == GraphType.Flag)
+            {
+                var typeName = GetDefinitionTypeName(entry.GraphAsset);
+                if (!string.IsNullOrEmpty(typeName))
+                {
+                    var subfolder = graphType == GraphType.Enum ? "Enums" : "Flags";
+
+                    // Could be in Generated folder (no Quantum) or Quantum folder
+                    var soEnumPath = Path.Combine(OutputPath, subfolder, $"{typeName}.cs");
+                    if (File.Exists(soEnumPath))
+                        AssetDatabase.DeleteAsset(soEnumPath);
+
+                    var quantumEnumPath = $"Assets/QuantumUser/Simulation/DataGraph/{subfolder}/{typeName}.cs";
+                    if (File.Exists(quantumEnumPath))
+                        AssetDatabase.DeleteAsset(quantumEnumPath);
+
+                    CleanEmptyFolder(Path.Combine(OutputPath, subfolder));
+                    CleanEmptyFolder($"Assets/QuantumUser/Simulation/DataGraph/{subfolder}");
+                }
+            }
+
+            // 4. Clean registry entries
+            CleanRegistryForGraph(graphName);
+
+            // 5. Delete the graph asset itself
             AssetDatabase.DeleteAsset(entry.AssetPath);
             AssetDatabase.Refresh();
 
@@ -587,6 +617,48 @@ namespace DataGraph.Editor
                 _graphView?.ClearGraph();
             }
             _needsRefresh = true;
+        }
+
+        /// <summary>
+        /// Extracts the TypeName from an Enum/Flag graph's definition node.
+        /// </summary>
+        private static string GetDefinitionTypeName(DataGraphAsset graphAsset)
+        {
+            foreach (var node in graphAsset.Nodes)
+            {
+                if (node.TypeName is NodeTypeRegistry.Types.Enum
+                    or NodeTypeRegistry.Types.Flag)
+                    return node.GetProperty("TypeName", "");
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Removes SO and Blob entries from the DataGraphRegistry for a deleted graph.
+        /// </summary>
+        private static void CleanRegistryForGraph(string graphName)
+        {
+            var guids = AssetDatabase.FindAssets("t:DataGraphRegistry");
+            if (guids.Length == 0) return;
+
+            var path = AssetDatabase.GUIDToAssetPath(guids[0]);
+            var registry = AssetDatabase.LoadAssetAtPath<DataGraph.Runtime.DataGraphRegistry>(path);
+            if (registry == null) return;
+
+            Undo.RecordObject(registry, "Clean Registry");
+            registry.UnregisterSO(graphName);
+            registry.UnregisterBlob(graphName);
+            registry.CleanUp();
+            EditorUtility.SetDirty(registry);
+            AssetDatabase.SaveAssets();
+        }
+
+        private static void CleanEmptyFolder(string folderPath)
+        {
+            if (!AssetDatabase.IsValidFolder(folderPath)) return;
+            var remaining = AssetDatabase.FindAssets("", new[] { folderPath });
+            if (remaining.Length == 0)
+                AssetDatabase.DeleteAsset(folderPath);
         }
 
         private void RefreshGraphList()

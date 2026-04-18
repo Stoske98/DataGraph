@@ -87,5 +87,24 @@ namespace DataGraph.Runtime
                 string.IsNullOrEmpty(e.builderTypeName) ||
                 string.IsNullOrEmpty(e.blobFileName));
         }
+
+        /// <summary>
+        /// Removes an SO database asset by matching its name.
+        /// </summary>
+        public void UnregisterSO(string assetName)
+        {
+            if (string.IsNullOrEmpty(assetName)) return;
+            _soAssets.RemoveAll(a => a != null && a.name == assetName + "Database");
+        }
+
+        /// <summary>
+        /// Removes a Blob entry by matching its blob file name.
+        /// </summary>
+        public void UnregisterBlob(string graphName)
+        {
+            if (string.IsNullOrEmpty(graphName)) return;
+            var blobFileName = graphName + ".blob";
+            _blobEntries.RemoveAll(e => e.blobFileName == blobFileName);
+        }
     }
 }

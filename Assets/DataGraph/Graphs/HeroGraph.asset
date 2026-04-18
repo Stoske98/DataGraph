@@ -1,0 +1,148 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 078ea1d5631c38f479ac166f80c4ad04, type: 3}
+  m_Name: HeroGraph
+  m_EditorClassIdentifier: DataGraph.Editor::DataGraph.Editor.DataGraphAsset
+  _graphName: HeroGraph
+  _sheetId: https://1drv.ms/x/c/2288ab75ad4712c2/IQCCBzvfQcpjS4rmgFnu1sZpARBfxdBf8qJNhA1aJZOzDbY
+  _sheetName: Hero
+  _headerRowOffset: 1
+  _graphType: 0
+  _nodes:
+  - _guid: 8a4c09dc-ae2c-44b4-aebb-1983c42573c7
+    _typeName: Root
+    _position: {x: -46, y: -42.5}
+    _isFixed: 1
+    _properties: []
+  - _guid: cbf56f9e-d9b1-4eec-8f07-63b56dc7ffef
+    _typeName: Dictionary
+    _position: {x: 74, y: -42.5}
+    _isFixed: 1
+    _properties:
+    - _key: KeyColumn
+      _value: A
+    - _key: KeyType
+      _value: Int
+  - _guid: c64af2e8-2c19-4277-9fee-09c83e79ce7c
+    _typeName: Object
+    _position: {x: 314, y: -42.5}
+    _isFixed: 1
+    _properties:
+    - _key: TypeName
+      _value: Hero
+  - _guid: fb6cabe5-92ba-4036-a51f-fcf474a328d1
+    _typeName: StringField
+    _position: {x: 582.6667, y: -215.33333}
+    _isFixed: 0
+    _properties:
+    - _key: Column
+      _value: B
+    - _key: FieldName
+      _value: name
+  - _guid: 19c1c9df-a21d-42ee-8818-56c762efda28
+    _typeName: EnumField
+    _position: {x: 583.3334, y: -74.66667}
+    _isFixed: 0
+    _properties:
+    - _key: Column
+      _value: E
+    - _key: EnumTypeName
+      _value: EAttribute
+    - _key: FieldName
+      _value: attribute
+  - _guid: 6e0fd516-5845-4335-ae9f-47b5792a0165
+    _typeName: Object
+    _position: {x: 603.3334, y: 104.66667}
+    _isFixed: 0
+    _properties:
+    - _key: TypeName
+      _value: Stat
+    - _key: FieldName
+      _value: stat
+  - _guid: a3916a4b-fc31-4893-9f4b-8b47691ea4b5
+    _typeName: NumberField
+    _position: {x: 862.00006, y: 44.666664}
+    _isFixed: 0
+    _properties:
+    - _key: Column
+      _value: C
+    - _key: NumberType
+      _value: Int
+    - _key: FieldName
+      _value: hp
+  - _guid: 3221432b-8054-4c0a-809e-922c2f767471
+    _typeName: NumberField
+    _position: {x: 888.6667, y: 225.33333}
+    _isFixed: 0
+    _properties:
+    - _key: Column
+      _value: D
+    - _key: NumberType
+      _value: Int
+    - _key: FieldName
+      _value: mana
+  - _guid: a6bece25-17a8-4512-a767-d14befa0e7e1
+    _typeName: FlagField
+    _position: {x: 360.6667, y: 210.66667}
+    _isFixed: 0
+    _properties:
+    - _key: Column
+      _value: F
+    - _key: FlagTypeName
+      _value: FAttribute
+    - _key: Separator
+      _value: '|'
+    - _key: FieldName
+      _value: flag
+  _edges:
+  - _outputNodeGuid: 8a4c09dc-ae2c-44b4-aebb-1983c42573c7
+    _outputPortName: Children
+    _inputNodeGuid: cbf56f9e-d9b1-4eec-8f07-63b56dc7ffef
+    _inputPortName: Parent
+    _isFixed: 1
+  - _outputNodeGuid: cbf56f9e-d9b1-4eec-8f07-63b56dc7ffef
+    _outputPortName: Children
+    _inputNodeGuid: c64af2e8-2c19-4277-9fee-09c83e79ce7c
+    _inputPortName: Parent
+    _isFixed: 1
+  - _outputNodeGuid: c64af2e8-2c19-4277-9fee-09c83e79ce7c
+    _outputPortName: Children
+    _inputNodeGuid: fb6cabe5-92ba-4036-a51f-fcf474a328d1
+    _inputPortName: Parent
+    _isFixed: 0
+  - _outputNodeGuid: c64af2e8-2c19-4277-9fee-09c83e79ce7c
+    _outputPortName: Children
+    _inputNodeGuid: 19c1c9df-a21d-42ee-8818-56c762efda28
+    _inputPortName: Parent
+    _isFixed: 0
+  - _outputNodeGuid: c64af2e8-2c19-4277-9fee-09c83e79ce7c
+    _outputPortName: Children
+    _inputNodeGuid: 6e0fd516-5845-4335-ae9f-47b5792a0165
+    _inputPortName: Parent
+    _isFixed: 0
+  - _outputNodeGuid: 6e0fd516-5845-4335-ae9f-47b5792a0165
+    _outputPortName: Children
+    _inputNodeGuid: 3221432b-8054-4c0a-809e-922c2f767471
+    _inputPortName: Parent
+    _isFixed: 0
+  - _outputNodeGuid: 6e0fd516-5845-4335-ae9f-47b5792a0165
+    _outputPortName: Children
+    _inputNodeGuid: a3916a4b-fc31-4893-9f4b-8b47691ea4b5
+    _inputPortName: Parent
+    _isFixed: 0
+  - _outputNodeGuid: c64af2e8-2c19-4277-9fee-09c83e79ce7c
+    _outputPortName: Children
+    _inputNodeGuid: a6bece25-17a8-4512-a767-d14befa0e7e1
+    _inputPortName: Parent
+    _isFixed: 0
+  _cachedHeaders: []
+  _lastFetchTimeTicks: 0

@@ -399,15 +399,26 @@ namespace DataGraph.Editor.GraphView
         private static List<string> ScanGeneratedEnums(bool isFlag)
         {
             var result = new List<string>();
-            var basePath = DataGraphSettings.Instance.Paths.GeneratedFolder;
-            var path = $"{basePath}/{(isFlag ? "Flags" : "Enums")}";
-            if (!AssetDatabase.IsValidFolder(path)) return result;
-            foreach (var guid in AssetDatabase.FindAssets("t:MonoScript", new[] { path }))
+            var subfolder = isFlag ? "Flags" : "Enums";
+
+            var searchPaths = new[]
             {
-                var fn = System.IO.Path.GetFileNameWithoutExtension(
-                    AssetDatabase.GUIDToAssetPath(guid));
-                if (!string.IsNullOrEmpty(fn)) result.Add(fn);
+                $"{DataGraphSettings.Instance.Paths.GeneratedFolder}/{subfolder}",
+                $"Assets/QuantumUser/Simulation/DataGraph/{subfolder}"
+            };
+
+            foreach (var sp in searchPaths)
+            {
+                if (!AssetDatabase.IsValidFolder(sp)) continue;
+                foreach (var guid in AssetDatabase.FindAssets("t:MonoScript", new[] { sp }))
+                {
+                    var fn = System.IO.Path.GetFileNameWithoutExtension(
+                        AssetDatabase.GUIDToAssetPath(guid));
+                    if (!string.IsNullOrEmpty(fn) && !result.Contains(fn))
+                        result.Add(fn);
+                }
             }
+
             return result;
         }
 

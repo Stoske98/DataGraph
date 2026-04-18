@@ -147,6 +147,14 @@ namespace DataGraph.Editor.CodeGen
                     w.Line($"public {GetBlobTypeName(custom.ValueType)} {custom.FieldName};");
                     break;
 
+                case ParseableEnumField enumField:
+                    w.Line($"public {enumField.EnumTypeName} {enumField.FieldName};");
+                    break;
+
+                case ParseableFlagField flagField:
+                    w.Line($"public {flagField.FlagTypeName} {flagField.FieldName};");
+                    break;
+
                 case ParseableAssetField:
                     w.Line($"public BlobString {node.FieldName};");
                     break;
@@ -200,13 +208,12 @@ namespace DataGraph.Editor.CodeGen
                 case ParseableDictionaryRoot dict:
                 {
                     var entryBlob = dict.TypeName + "Blob";
-                    var keyBlobType = dict.KeyType == KeyType.String ? "BlobString" : "int";
-                    var keyParamType = TypeMapper.GetKeyTypeName(dict.KeyType);
+                    var keyType = TypeMapper.GetKeyTypeName(dict.KeyType);
                     w.BeginBlock($"public struct {dbName}");
-                    w.Line($"public BlobArray<{keyBlobType}> keys;");
+                    w.Line($"public BlobArray<{keyType}> keys;");
                     w.Line($"public BlobArray<{entryBlob}> values;");
                     w.BlankLine();
-                    w.BeginBlock($"public ref {entryBlob} GetById({keyParamType} key)");
+                    w.BeginBlock($"public ref {entryBlob} GetById({keyType} key)");
                     w.Line("int lo = 0, hi = keys.Length - 1;");
                     w.Line("while (lo <= hi)");
                     w.BeginBlock("");
@@ -314,13 +321,10 @@ namespace DataGraph.Editor.CodeGen
 
             switch (root)
             {
-                case ParseableDictionaryRoot dict:
+                case ParseableDictionaryRoot:
                     w.Line($"var handle = new BlobDatabaseHandle<{entryBlob}, {dbName}>(");
                     w.Line($"    blobRef,");
-                    if (dict.KeyType == KeyType.Int)
-                        w.Line($"    getById: (ref {dbName} db, int key) => ref db.GetById(key));");
-                    else
-                        w.Line($"    getByStringId: (ref {dbName} db, string key) => ref db.GetById(key));");
+                    w.Line($"    getById: (ref {dbName} db, int key) => ref db.GetById(key));");
                     break;
                 case ParseableArrayRoot:
                     w.Line($"var handle = new BlobDatabaseHandle<{entryBlob}, {dbName}>(");
@@ -350,10 +354,7 @@ namespace DataGraph.Editor.CodeGen
             w.BlankLine();
             w.Line("var keysBuilder = builder.Allocate(ref dbRoot.keys, keys.Length);");
             w.Line("for (int i = 0; i < keys.Length; i++)");
-            if (root.KeyType == KeyType.String)
-                w.Line("    builder.AllocateString(ref keysBuilder[i], keys[i] ?? \"\");");
-            else
-                w.Line("    keysBuilder[i] = keys[i];");
+            w.Line("    keysBuilder[i] = keys[i];");
             w.BlankLine();
             w.Line("var valuesBuilder = builder.Allocate(ref dbRoot.values, values.Length);");
             w.Line("for (int i = 0; i < values.Length; i++)");
@@ -433,6 +434,14 @@ namespace DataGraph.Editor.CodeGen
                             w.Line($"public {GetBlobTypeName(custom.ValueType)} {custom.FieldName};");
                         break;
 
+                    case ParseableEnumField enumField:
+                        w.Line($"public {enumField.EnumTypeName} {enumField.FieldName};");
+                        break;
+
+                    case ParseableFlagField flagField:
+                        w.Line($"public {flagField.FlagTypeName} {flagField.FieldName};");
+                        break;
+
                     case ParseableAssetField:
                         w.Line($"public string {child.FieldName};");
                         break;
@@ -492,6 +501,14 @@ namespace DataGraph.Editor.CodeGen
                         w.Line($"{target}.{custom.FieldName} = {source}.{custom.FieldName};");
                         break;
 
+                    case ParseableEnumField enumField:
+                        w.Line($"{target}.{enumField.FieldName} = {source}.{enumField.FieldName};");
+                        break;
+
+                    case ParseableFlagField flagField:
+                        w.Line($"{target}.{flagField.FieldName} = {source}.{flagField.FieldName};");
+                        break;
+
                     case ParseableAssetField:
                         w.Line($"builder.AllocateString(ref {target}.{child.FieldName}, {source}.{child.FieldName} ?? \"\");");
                         break;
@@ -548,10 +565,7 @@ namespace DataGraph.Editor.CodeGen
             w.BeginBlock("");
             w.Line($"var _{fieldName}KeysBuilder = builder.Allocate(ref {target}.{fieldName}Keys, {source}.{fieldName}Keys.Length);");
             w.Line($"for (int {iterVar} = 0; {iterVar} < {source}.{fieldName}Keys.Length; {iterVar}++)");
-            if (dict.KeyType == KeyType.String)
-                w.Line($"    builder.AllocateString(ref _{fieldName}KeysBuilder[{iterVar}], {source}.{fieldName}Keys[{iterVar}] ?? \"\");");
-            else
-                w.Line($"    _{fieldName}KeysBuilder[{iterVar}] = {source}.{fieldName}Keys[{iterVar}];");
+            w.Line($"    _{fieldName}KeysBuilder[{iterVar}] = {source}.{fieldName}Keys[{iterVar}];");
             w.BlankLine();
             w.Line($"var _{fieldName}ValsBuilder = builder.Allocate(ref {target}.{fieldName}Values, {source}.{fieldName}Values.Length);");
             w.Line($"for (int {iterVar}v = 0; {iterVar}v < {source}.{fieldName}Values.Length; {iterVar}v++)");
