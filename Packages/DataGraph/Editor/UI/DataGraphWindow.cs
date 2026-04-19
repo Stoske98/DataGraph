@@ -487,22 +487,25 @@ namespace DataGraph.Editor
             EditorGUIUtility.AddCursorRect(horizHandle, MouseCursor.ResizeVertical);
 
             var e = Event.current;
+            var controlId = GUIUtility.GetControlID(FocusType.Passive);
 
             if (e.type == EventType.MouseDown && e.button == 0)
             {
                 if (vertHandle.Contains(e.mousePosition))
                 {
                     _resizingLeft = true;
+                    GUIUtility.hotControl = controlId;
                     e.Use();
                 }
                 else if (horizHandle.Contains(e.mousePosition))
                 {
                     _resizingBottom = true;
+                    GUIUtility.hotControl = controlId;
                     e.Use();
                 }
             }
 
-            if (e.type == EventType.MouseDrag)
+            if (e.type == EventType.MouseDrag && GUIUtility.hotControl == controlId)
             {
                 if (_resizingLeft)
                 {
@@ -518,10 +521,12 @@ namespace DataGraph.Editor
                 }
             }
 
-            if (e.type == EventType.MouseUp)
+            if (e.type == EventType.MouseUp && GUIUtility.hotControl == controlId)
             {
                 _resizingLeft = false;
                 _resizingBottom = false;
+                GUIUtility.hotControl = 0;
+                e.Use();
             }
         }
 
