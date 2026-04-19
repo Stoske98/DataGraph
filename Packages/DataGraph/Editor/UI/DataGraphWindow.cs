@@ -49,6 +49,7 @@ namespace DataGraph.Editor
         private bool _needsRefresh = true;
 
         private string _jsonPreviewText = "";
+        private RawTableData _cachedTableData;
 
         private string OutputPath => DataGraphSettings.Instance.Paths.GeneratedFolder;
 
@@ -398,7 +399,7 @@ namespace DataGraph.Editor
             EditorGUILayout.LabelField("JSON Preview", EditorStyles.miniLabel, GUILayout.Width(80));
             GUILayout.FlexibleSpace();
             if (GUILayout.Button("Refresh", EditorStyles.toolbarButton, GUILayout.Width(55)))
-                RefreshJsonPreview(manual: true);
+                FetchAndCacheTableData();
             EditorGUILayout.EndHorizontal();
 
             _jsonScroll = EditorGUILayout.BeginScrollView(_jsonScroll);
@@ -559,8 +560,9 @@ namespace DataGraph.Editor
 
             _activeGraph = graphAsset;
             _activeGraphPath = graphAsset != null ? AssetDatabase.GetAssetPath(graphAsset) : "";
+            _cachedTableData = null;
             _graphView?.LoadGraph(graphAsset);
-            RefreshJsonPreview(manual: true);
+            FetchAndCacheTableData();
             Repaint();
         }
 
@@ -892,7 +894,7 @@ namespace DataGraph.Editor
 
         // ==================== JSON PREVIEW ====================
 
-        private async void RefreshJsonPreview(bool manual = false)
+        private void RefreshJsonPreview(bool manual = false)
         {
             if (!manual && !DataGraphSettings.Instance.Editor.AutoRefreshJsonPreview)
                 return;
@@ -903,10 +905,9 @@ namespace DataGraph.Editor
                 return;
             }
 
-            var provider = ResolveProviderForGraph(_activeGraph.SheetId);
-            if (provider == null)
+            if (_cachedTableData == null)
             {
-                _jsonPreviewText = "No provider available.";
+                _jsonPreviewText = "No cached data. Click Refresh to download.";
                 return;
             }
 
@@ -920,17 +921,8 @@ namespace DataGraph.Editor
                     return;
                 }
 
-                var sheetRef = new SheetReference(
-                    _activeGraph.SheetId, _activeGraph.HeaderRowOffset, _activeGraph.SheetName);
-                var fetchResult = await provider.FetchAsync(sheetRef, CancellationToken.None);
-                if (fetchResult.IsFailure)
-                {
-                    _jsonPreviewText = fetchResult.Error;
-                    return;
-                }
-
                 var parser = new Parsing.ParserEngine();
-                var parseResult = parser.Parse(fetchResult.Value, adaptResult.Value);
+                var parseResult = parser.Parse(_cachedTableData, adaptResult.Value);
                 if (parseResult.IsFailure)
                 {
                     _jsonPreviewText = parseResult.Error;
@@ -948,6 +940,59 @@ namespace DataGraph.Editor
             Repaint();
         }
 
+        /// <summary>
+        /// Downloads table data from a fresh provider instance and caches it.
+        /// Called on graph open and on Refresh button click.
+        /// Creates a new provider each time to bypass provider-level caches.
+        /// </summary>
+        private async void FetchAndCacheTableData()
+        {
+            if (_activeGraph == null || string.IsNullOrEmpty(_activeGraph.SheetId))
+            {
+                _cachedTableData = null;
+                _jsonPreviewText = "Select a graph with a data source.";
+                Repaint();
+                return;
+            }
+
+            var provider = ResolveProviderForGraph(_activeGraph.SheetId);
+            if (provider == null)
+            {
+                _cachedTableData = null;
+                _jsonPreviewText = "No provider available.";
+                Repaint();
+                return;
+            }
+
+            try
+            {
+                var sheetRef = new SheetReference(
+                    _activeGraph.SheetId, _activeGraph.HeaderRowOffset, _activeGraph.SheetName);
+                var fetchResult = await provider.FetchAsync(sheetRef, CancellationToken.None);
+                if (fetchResult.IsFailure)
+                {
+                    _cachedTableData = null;
+                    _jsonPreviewText = fetchResult.Error;
+                    Repaint();
+                    return;
+                }
+
+                _cachedTableData = fetchResult.Value;
+
+                _activeGraph.UpdateCachedHeaders(fetchResult.Value.Headers);
+                EditorUtility.SetDirty(_activeGraph);
+
+                RefreshJsonPreview(manual: true);
+            }
+            catch (Exception ex)
+            {
+                _cachedTableData = null;
+                _jsonPreviewText = $"Fetch error: {ex.Message}";
+            }
+            Repaint();
+        }
+
+        /// <summary>
         // ==================== PROVIDER RESOLUTION ====================
 
         private static ISheetProvider ResolveProviderForGraph(string sheetId)
