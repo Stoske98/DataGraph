@@ -315,6 +315,7 @@ namespace DataGraph.Editor
                 AssetDatabase.SaveAssets();
 
                 // Rename asset file to match graph name
+                bool renamed = false;
                 if (!string.IsNullOrEmpty(_editGraphName))
                 {
                     var dir = Path.GetDirectoryName(entry.AssetPath);
@@ -323,7 +324,26 @@ namespace DataGraph.Editor
                     {
                         var result = AssetDatabase.MoveAsset(entry.AssetPath, newPath);
                         if (string.IsNullOrEmpty(result))
+                        {
                             entry.AssetPath = newPath;
+                            renamed = true;
+                        }
+                    }
+                }
+
+                // After rename, reload asset from new path to keep all references valid
+                if (renamed)
+                {
+                    var reloaded = AssetDatabase.LoadAssetAtPath<DataGraphAsset>(entry.AssetPath);
+                    if (reloaded != null)
+                    {
+                        entry.GraphAsset = reloaded;
+                        if (_activeGraph != null)
+                        {
+                            _activeGraph = reloaded;
+                            _activeGraphPath = entry.AssetPath;
+                            _graphView?.LoadGraph(reloaded);
+                        }
                     }
                 }
 
@@ -534,6 +554,9 @@ namespace DataGraph.Editor
 
         private void SelectGraph(DataGraphAsset graphAsset)
         {
+            if (_activeGraph == graphAsset)
+                return;
+
             _activeGraph = graphAsset;
             _activeGraphPath = graphAsset != null ? AssetDatabase.GetAssetPath(graphAsset) : "";
             _graphView?.LoadGraph(graphAsset);

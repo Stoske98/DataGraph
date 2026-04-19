@@ -56,6 +56,7 @@ namespace DataGraph.Editor.GraphView
 
         public void LoadGraph(DataGraphAsset graphAsset, bool panToRoot = true)
         {
+            Debug.Log($"LoadGraph called, stack:\n{System.Environment.StackTrace}");
             _graphAsset = graphAsset; ClearGraph();
             if (_graphAsset == null) return;
             var views = new Dictionary<string, DataGraphNodeView>();
