@@ -77,31 +77,35 @@ namespace DataGraph.Editor
         internal sealed class CodeGenSettings
         {
             [SerializeField] private string _namespace = "DataGraph.Data";
-            [SerializeField] private bool _autoParseOnSave = true;
 
             public string Namespace
             {
                 get => _namespace;
                 set => _namespace = string.IsNullOrWhiteSpace(value) ? "DataGraph.Data" : value.Trim();
             }
-
-            public bool AutoParseOnSave
-            {
-                get => _autoParseOnSave;
-                set => _autoParseOnSave = value;
-            }
         }
 
         [Serializable]
         internal sealed class EditorBehavior
         {
-            [SerializeField] private bool _autoRefreshJsonPreview = true;
+            [SerializeField] private ColumnDisplayMode _columnDisplayMode = ColumnDisplayMode.Letters;
 
-            public bool AutoRefreshJsonPreview
+            public ColumnDisplayMode ColumnDisplayMode
             {
-                get => _autoRefreshJsonPreview;
-                set => _autoRefreshJsonPreview = value;
+                get => _columnDisplayMode;
+                set => _columnDisplayMode = value;
             }
         }
+    }
+
+    /// <summary>
+    /// Controls how column dropdowns are displayed in node property editors.
+    /// Letters shows A, B, C; Headers shows the header row values from
+    /// the cached sheet data (e.g. "id", "name", "damage").
+    /// </summary>
+    internal enum ColumnDisplayMode
+    {
+        Letters = 0,
+        Headers = 1
     }
 }

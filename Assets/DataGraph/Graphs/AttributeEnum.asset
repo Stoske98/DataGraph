@@ -40,5 +40,8 @@ MonoBehaviour:
     _inputNodeGuid: 92902464-b9cd-4f71-9f8f-5636bfd20a8f
     _inputPortName: Parent
     _isFixed: 1
-  _cachedHeaders: []
-  _lastFetchTimeTicks: 0
+  _cachedHeaders:
+  - name
+  - enum value
+  - 'flag value '
+  _lastFetchTimeTicks: 639124883380788823

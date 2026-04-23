@@ -118,7 +118,19 @@ namespace DataGraph.Editor
 
         private void OnGraphStructureChanged()
         {
-            RefreshJsonPreview(manual: false);
+            RefreshJsonPreview();
+        }
+
+        /// <summary>
+        /// Reloads the currently active graph in the GraphView.
+        /// Called after column display mode migration to rebuild
+        /// node property controls with updated column choices.
+        /// </summary>
+        internal void ReloadActiveGraph()
+        {
+            if (_activeGraph != null && _graphView != null)
+                _graphView.LoadGraph(_activeGraph);
+            Repaint();
         }
 
         private void UpdateGraphViewRect()
@@ -894,10 +906,8 @@ namespace DataGraph.Editor
 
         // ==================== JSON PREVIEW ====================
 
-        private void RefreshJsonPreview(bool manual = false)
+        private void RefreshJsonPreview()
         {
-            if (!manual && !DataGraphSettings.Instance.Editor.AutoRefreshJsonPreview)
-                return;
 
             if (_activeGraph == null || string.IsNullOrEmpty(_activeGraph.SheetId))
             {
@@ -982,7 +992,7 @@ namespace DataGraph.Editor
                 _activeGraph.UpdateCachedHeaders(fetchResult.Value.Headers);
                 EditorUtility.SetDirty(_activeGraph);
 
-                RefreshJsonPreview(manual: true);
+                RefreshJsonPreview();
             }
             catch (Exception ex)
             {

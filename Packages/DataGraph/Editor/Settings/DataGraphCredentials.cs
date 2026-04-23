@@ -7,7 +7,8 @@ namespace DataGraph.Editor
     /// Never serialized to project assets — keeps OAuth tokens and
     /// API configuration out of source control.
     /// Google Sheets credentials are managed by GoogleSheetsProvider through
-    /// its own IAuthStrategy system — this class handles OneDrive only.
+    /// its own IAuthStrategy system — this class handles OneDrive and
+    /// cross-assembly credential metadata (e.g. service account display info).
     /// </summary>
     internal static class DataGraphCredentials
     {
@@ -17,7 +18,11 @@ namespace DataGraph.Editor
         private const string OneDriveTenantIdKey = Prefix + "OneDrive.TenantId";
         private const string OneDriveRefreshTokenKey = Prefix + "OneDrive.RefreshToken";
 
+        private const string GoogleServiceAccountKeyPathKey =
+            Prefix + "Google.ServiceAccountKeyPath";
+
         public static OneDriveCredentialStore OneDrive { get; } = new();
+        public static GoogleServiceAccountStore GoogleServiceAccount { get; } = new();
 
         /// <summary>
         /// Clears all stored OneDrive credentials from EditorPrefs.
@@ -27,6 +32,14 @@ namespace DataGraph.Editor
             EditorPrefs.DeleteKey(OneDriveClientIdKey);
             EditorPrefs.DeleteKey(OneDriveTenantIdKey);
             EditorPrefs.DeleteKey(OneDriveRefreshTokenKey);
+        }
+
+        /// <summary>
+        /// Clears the stored Google service account key file path.
+        /// </summary>
+        public static void ClearGoogleServiceAccount()
+        {
+            EditorPrefs.DeleteKey(GoogleServiceAccountKeyPathKey);
         }
 
         /// <summary>
@@ -59,6 +72,29 @@ namespace DataGraph.Editor
                                         && !string.IsNullOrEmpty(RefreshToken);
 
             public bool HasClientId => !string.IsNullOrEmpty(ClientId);
+        }
+
+        /// <summary>
+        /// Google service account key file path storage.
+        /// The actual key content lives in the JSON file on disk;
+        /// only the path is stored in EditorPrefs.
+        /// The key file is read by <c>ServiceAccountStrategy</c> in the
+        /// GoogleSheets assembly. This store exists in the Editor assembly
+        /// so that <c>DataGraphSettingsProvider</c> can read/write the path
+        /// without cross-referencing the GoogleSheets assembly.
+        /// Both assemblies use the same EditorPrefs key.
+        /// </summary>
+        internal sealed class GoogleServiceAccountStore
+        {
+            public string KeyFilePath
+            {
+                get => EditorPrefs.GetString(GoogleServiceAccountKeyPathKey, "");
+                set => EditorPrefs.SetString(GoogleServiceAccountKeyPathKey, value ?? "");
+            }
+
+            public bool HasKeyFile =>
+                !string.IsNullOrEmpty(KeyFilePath)
+                && System.IO.File.Exists(KeyFilePath);
         }
     }
 }

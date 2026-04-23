@@ -16,18 +16,26 @@ namespace DataGraph.Editor
     internal sealed class DataGraphSettingsProvider : SettingsProvider
     {
         private const string SettingsPath = "Project/DataGraph";
-        private const string Version = "1.5";
+        private const string Version = "2.0";
         private const string DocUrl = "https://docs.datagraph.dev";
 
         private const string OneDriveClientIdKey = "DataGraph.Credentials.OneDrive.ClientId";
         private const string OneDriveTenantIdKey = "DataGraph.Credentials.OneDrive.TenantId";
         private const string OneDriveRefreshTokenKey = "DataGraph.Credentials.OneDrive.RefreshToken";
 
-        private const string GsApiKeyPref = "DataGraph.GoogleSheets.ApiKey";
-        private const string GsClientIdPref = "DataGraph.GoogleSheets.OAuth.ClientId";
-        private const string GsClientSecretPref = "DataGraph.GoogleSheets.OAuth.ClientSecret";
-        private const string GsRefreshTokenPref = "DataGraph.GoogleSheets.OAuth.RefreshToken";
+        private const string GsApiKeyPref = "DataGraph_Google_ApiKey";
+        private const string GsClientIdPref = "DataGraph_Google_OAuthClientId";
+        private const string GsClientSecretPref = "DataGraph_Google_OAuthClientSecret";
+        private const string GsOAuthTokenPref = "DataGraph_Google_OAuthToken";
         private const string GsAuthMethodPref = "DataGraph.GoogleSheets.AuthMethod";
+        private const string GsServiceAccountKeyPathPref =
+            "DataGraph_Google_ServiceAccountKeyPath";
+
+        private static readonly string[] ColumnDisplayModeLabels =
+        {
+            "Column Letters",
+            "Header Names"
+        };
 
         private DataGraphSettings _settings;
 
@@ -40,6 +48,13 @@ namespace DataGraph.Editor
         private bool _oneDriveFoldout = true;
         private int _gsAuthMethod;
 
+        private static readonly string[] GoogleAuthMethodLabels =
+        {
+            "API Key",
+            "OAuth 2.0",
+            "Service Account"
+        };
+
         private DataGraphSettingsProvider()
             : base(SettingsPath, SettingsScope.Project) { }
 
@@ -51,7 +66,8 @@ namespace DataGraph.Editor
                 keywords = new HashSet<string>
                 {
                     "DataGraph", "Google Sheets", "OneDrive", "Namespace",
-                    "Parse", "JSON", "Preview", "OAuth", "API Key"
+                    "Parse", "JSON", "Preview", "OAuth", "API Key",
+                    "Service Account"
                 }
             };
         }
@@ -115,7 +131,7 @@ namespace DataGraph.Editor
             }
 
             var newMethod = EditorGUILayout.Popup("Auth Method",
-                _gsAuthMethod, new[] { "API Key", "OAuth 2.0" });
+                _gsAuthMethod, GoogleAuthMethodLabels);
             if (newMethod != _gsAuthMethod)
             {
                 _gsAuthMethod = newMethod;
@@ -124,10 +140,18 @@ namespace DataGraph.Editor
 
             EditorGUILayout.Space(4);
 
-            if (_gsAuthMethod == 0)
-                DrawGoogleApiKeyAuth();
-            else
-                DrawGoogleOAuthAuth();
+            switch (_gsAuthMethod)
+            {
+                case 0:
+                    DrawGoogleApiKeyAuth();
+                    break;
+                case 1:
+                    DrawGoogleOAuthAuth();
+                    break;
+                case 2:
+                    DrawGoogleServiceAccountAuth();
+                    break;
+            }
 
             EditorGUILayout.Space(4);
             EditorGUILayout.BeginHorizontal();
@@ -171,18 +195,19 @@ namespace DataGraph.Editor
             if (newSecret != clientSecret)
                 EditorPrefs.SetString(GsClientSecretPref, newSecret);
 
-            var hasRefresh = !string.IsNullOrEmpty(
-                EditorPrefs.GetString(GsRefreshTokenPref, ""));
+            var hasToken = EditorPrefs.HasKey(GsOAuthTokenPref)
+                           && !string.IsNullOrEmpty(
+                               EditorPrefs.GetString(GsOAuthTokenPref, ""));
 
             EditorGUILayout.Space(4);
             EditorGUILayout.BeginHorizontal();
             GUILayout.FlexibleSpace();
 
-            if (hasRefresh)
+            if (hasToken)
             {
                 if (GUILayout.Button("Sign Out", GUILayout.Width(80)))
                 {
-                    EditorPrefs.SetString(GsRefreshTokenPref, "");
+                    EditorPrefs.DeleteKey(GsOAuthTokenPref);
                     SignOutGoogle();
                 }
             }
@@ -197,7 +222,137 @@ namespace DataGraph.Editor
             }
 
             EditorGUILayout.EndHorizontal();
-            DrawStatusDot(hasRefresh);
+            DrawStatusDot(hasToken);
+        }
+
+        private void DrawGoogleServiceAccountAuth()
+        {
+            var keyPath = EditorPrefs.GetString(GsServiceAccountKeyPathPref, "");
+
+            EditorGUILayout.BeginHorizontal();
+            var newPath = EditorGUILayout.TextField("JSON Key File", keyPath);
+            if (GUILayout.Button("...", GUILayout.Width(30)))
+            {
+                var selected = EditorUtility.OpenFilePanel(
+                    "Select Service Account JSON Key",
+                    string.IsNullOrEmpty(keyPath) ? "" : System.IO.Path.GetDirectoryName(keyPath),
+                    "json");
+                if (!string.IsNullOrEmpty(selected))
+                    newPath = selected;
+            }
+            EditorGUILayout.EndHorizontal();
+
+            if (newPath != keyPath)
+            {
+                EditorPrefs.SetString(GsServiceAccountKeyPathPref, newPath);
+                ConfigureGoogleServiceAccount(newPath);
+            }
+
+            var fileExists = !string.IsNullOrEmpty(newPath)
+                             && System.IO.File.Exists(newPath);
+
+            if (fileExists)
+            {
+                var email = ReadServiceAccountEmail(newPath);
+                if (!string.IsNullOrEmpty(email))
+                {
+                    EditorGUILayout.Space(2);
+                    EditorGUILayout.LabelField("Account", email);
+                    EditorGUILayout.HelpBox(
+                        "Share your spreadsheet with this email address " +
+                        "to grant the service account read access.",
+                        MessageType.Info);
+                }
+            }
+            else if (!string.IsNullOrEmpty(newPath))
+            {
+                EditorGUILayout.HelpBox(
+                    "Key file not found at the specified path.",
+                    MessageType.Warning);
+            }
+
+            EditorGUILayout.Space(4);
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.FlexibleSpace();
+            EditorGUI.BeginDisabledGroup(string.IsNullOrEmpty(newPath));
+            if (GUILayout.Button("Clear", GUILayout.Width(80)))
+            {
+                EditorPrefs.SetString(GsServiceAccountKeyPathPref, "");
+                ClearGoogleServiceAccountViaReflection();
+            }
+            EditorGUI.EndDisabledGroup();
+            EditorGUILayout.EndHorizontal();
+
+            DrawStatusDot(fileExists);
+        }
+
+        private static string ReadServiceAccountEmail(string path)
+        {
+            try
+            {
+                var json = System.IO.File.ReadAllText(path);
+                var emailKey = "\"client_email\"";
+                var idx = json.IndexOf(emailKey, StringComparison.Ordinal);
+                if (idx < 0) return null;
+
+                var colonIdx = json.IndexOf(':', idx + emailKey.Length);
+                if (colonIdx < 0) return null;
+
+                var quoteStart = json.IndexOf('"', colonIdx + 1);
+                if (quoteStart < 0) return null;
+
+                var quoteEnd = json.IndexOf('"', quoteStart + 1);
+                if (quoteEnd < 0) return null;
+
+                return json.Substring(quoteStart + 1, quoteEnd - quoteStart - 1);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static void ConfigureGoogleServiceAccount(string keyFilePath)
+        {
+            try
+            {
+                var provider = ProviderRegistry.CreateGoogleSheetsProvider();
+                provider.GetType()
+                    .GetMethod("ConfigureServiceAccount",
+                        BindingFlags.Public | BindingFlags.Instance)
+                    ?.Invoke(provider, new object[] { keyFilePath });
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(
+                    $"[DataGraph] Configure Service Account failed: {ex.Message}");
+            }
+        }
+
+        private static void ClearGoogleServiceAccountViaReflection()
+        {
+            try
+            {
+                var provider = ProviderRegistry.CreateGoogleSheetsProvider();
+                var strategyProp = provider.GetType()
+                    .GetProperty("Strategies",
+                        BindingFlags.Public | BindingFlags.Instance);
+                if (strategyProp == null) return;
+
+                var strategies = strategyProp.GetValue(provider);
+                var indexer = strategies.GetType().GetProperty("Item");
+                if (indexer == null) return;
+
+                var strategy = indexer.GetValue(strategies, new object[] { "ServiceAccount" });
+                strategy?.GetType()
+                    .GetMethod("SignOut", BindingFlags.Public | BindingFlags.Instance)
+                    ?.Invoke(strategy, null);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(
+                    $"[DataGraph] Clear Service Account failed: {ex.Message}");
+            }
         }
 
         private static void ConfigureGoogleApiKey(string apiKey)
@@ -255,8 +410,9 @@ namespace DataGraph.Editor
             EditorPrefs.DeleteKey(GsApiKeyPref);
             EditorPrefs.DeleteKey(GsClientIdPref);
             EditorPrefs.DeleteKey(GsClientSecretPref);
-            EditorPrefs.DeleteKey(GsRefreshTokenPref);
+            EditorPrefs.DeleteKey(GsOAuthTokenPref);
             EditorPrefs.DeleteKey(GsAuthMethodPref);
+            EditorPrefs.DeleteKey(GsServiceAccountKeyPathPref);
             SignOutGoogle();
         }
 
@@ -365,11 +521,6 @@ namespace DataGraph.Editor
                     _settings.CodeGeneration.Namespace);
                 if (ns != _settings.CodeGeneration.Namespace)
                     _settings.CodeGeneration.Namespace = ns;
-
-                var ap = EditorGUILayout.Toggle("Auto-Parse on Save",
-                    _settings.CodeGeneration.AutoParseOnSave);
-                if (ap != _settings.CodeGeneration.AutoParseOnSave)
-                    _settings.CodeGeneration.AutoParseOnSave = ap;
                 EditorGUI.indentLevel--;
             }
             EditorGUILayout.EndFoldoutHeaderGroup();
@@ -384,13 +535,55 @@ namespace DataGraph.Editor
             if (_editorFoldout)
             {
                 EditorGUI.indentLevel++;
-                var ar = EditorGUILayout.Toggle("Auto-Refresh JSON Preview",
-                    _settings.Editor.AutoRefreshJsonPreview);
-                if (ar != _settings.Editor.AutoRefreshJsonPreview)
-                    _settings.Editor.AutoRefreshJsonPreview = ar;
+                var currentMode = (int)_settings.Editor.ColumnDisplayMode;
+                var newMode = EditorGUILayout.Popup("Column Display",
+                    currentMode, ColumnDisplayModeLabels);
+                if (newMode != currentMode)
+                {
+                    var from = (ColumnDisplayMode)currentMode;
+                    var to = (ColumnDisplayMode)newMode;
+                    _settings.Editor.ColumnDisplayMode = to;
+                    MigrateAllGraphsColumnMode(from, to);
+                }
+
                 EditorGUI.indentLevel--;
             }
             EditorGUILayout.EndFoldoutHeaderGroup();
+        }
+
+        /// <summary>
+        /// Finds all DataGraphAsset instances in the project and migrates
+        /// their node column properties from one display mode to another.
+        /// Marks each modified asset dirty and refreshes the open editor window.
+        /// </summary>
+        private static void MigrateAllGraphsColumnMode(
+            ColumnDisplayMode from, ColumnDisplayMode to)
+        {
+            var guids = AssetDatabase.FindAssets("t:DataGraphAsset");
+            int migrated = 0;
+
+            foreach (var guid in guids)
+            {
+                var path = AssetDatabase.GUIDToAssetPath(guid);
+                var asset = AssetDatabase.LoadAssetAtPath<DataGraphAsset>(path);
+                if (asset == null) continue;
+
+                Undo.RecordObject(asset, "Change Column Display Mode");
+                asset.MigrateColumnDisplayMode(from, to);
+                EditorUtility.SetDirty(asset);
+                migrated++;
+            }
+
+            if (migrated > 0)
+            {
+                AssetDatabase.SaveAssets();
+                Debug.Log(
+                    $"[DataGraph] Migrated column display mode in {migrated} graph(s).");
+
+                var windows = Resources.FindObjectsOfTypeAll<DataGraphWindow>();
+                foreach (var w in windows)
+                    w.ReloadActiveGraph();
+            }
         }
 
         // ==================== ABOUT ====================

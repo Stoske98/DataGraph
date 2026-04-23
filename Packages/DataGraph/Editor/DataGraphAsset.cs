@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using DataGraph.Runtime;
 using UnityEngine;
 
 namespace DataGraph.Editor
@@ -12,6 +13,11 @@ namespace DataGraph.Editor
     [CreateAssetMenu(fileName = "NewGraph", menuName = "DataGraph/Graph")]
     internal sealed class DataGraphAsset : ScriptableObject
     {
+        private static readonly string[] ColumnPropertyKeys =
+        {
+            "Column", "KeyColumn", "IndexColumn", "NameColumn", "ValueColumn"
+        };
+
         [SerializeField] private string _graphName = "";
         [SerializeField] private string _sheetId = "";
         [SerializeField] private string _sheetName = "Sheet1";
@@ -41,14 +47,82 @@ namespace DataGraph.Editor
             _lastFetchTimeTicks = DateTime.Now.Ticks;
         }
 
+        /// <summary>
+        /// Returns column choices for node dropdown controls.
+        /// When mode is Letters: A, B, C, ... based on cached header count or 26 fallback.
+        /// When mode is Headers: header row values from cached sheet data.
+        /// </summary>
         public List<string> GetColumnChoices()
         {
-            if (_cachedHeaders.Count > 0)
+            var mode = DataGraphSettings.Instance.Editor.ColumnDisplayMode;
+
+            if (mode == ColumnDisplayMode.Headers && _cachedHeaders.Count > 0)
                 return new List<string>(_cachedHeaders);
-            var fallback = new List<string>();
-            for (int i = 0; i < 26; i++)
-                fallback.Add(((char)('A' + i)).ToString());
-            return fallback;
+
+            var count = _cachedHeaders.Count > 0 ? _cachedHeaders.Count : 26;
+            var choices = new List<string>(count);
+            for (int i = 0; i < count; i++)
+                choices.Add(RawTableData.IndexToColumnLetter(i));
+            return choices;
+        }
+
+        /// <summary>
+        /// Migrates all column property values in all nodes from one
+        /// display mode to another. For Letters-to-Headers: converts
+        /// "A" to the header string at index 0. For Headers-to-Letters:
+        /// finds the header string index and converts to column letter.
+        /// Skips nodes where conversion is not possible (missing headers
+        /// or unrecognized values).
+        /// </summary>
+        public void MigrateColumnDisplayMode(
+            ColumnDisplayMode from, ColumnDisplayMode to)
+        {
+            if (from == to) return;
+            if (_cachedHeaders.Count == 0) return;
+
+            foreach (var node in _nodes)
+            {
+                foreach (var key in ColumnPropertyKeys)
+                {
+                    var value = node.GetProperty(key, null);
+                    if (value == null) continue;
+
+                    string converted = null;
+
+                    if (from == ColumnDisplayMode.Letters
+                        && to == ColumnDisplayMode.Headers)
+                    {
+                        converted = LetterToHeader(value);
+                    }
+                    else if (from == ColumnDisplayMode.Headers
+                             && to == ColumnDisplayMode.Letters)
+                    {
+                        converted = HeaderToLetter(value);
+                    }
+
+                    if (converted != null)
+                        node.SetProperty(key, converted);
+                }
+            }
+        }
+
+        private string LetterToHeader(string letter)
+        {
+            var index = RawTableData.ColumnLetterToIndex(letter);
+            if (index < 0 || index >= _cachedHeaders.Count)
+                return null;
+            return _cachedHeaders[index];
+        }
+
+        private string HeaderToLetter(string header)
+        {
+            for (int i = 0; i < _cachedHeaders.Count; i++)
+            {
+                if (string.Equals(_cachedHeaders[i], header,
+                    StringComparison.OrdinalIgnoreCase))
+                    return RawTableData.IndexToColumnLetter(i);
+            }
+            return null;
         }
 
         public SerializedNode FindNode(string guid)

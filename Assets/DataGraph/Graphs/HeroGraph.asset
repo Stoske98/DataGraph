@@ -144,5 +144,11 @@ MonoBehaviour:
     _inputNodeGuid: a6bece25-17a8-4512-a767-d14befa0e7e1
     _inputPortName: Parent
     _isFixed: 0
-  _cachedHeaders: []
-  _lastFetchTimeTicks: 0
+  _cachedHeaders:
+  - id
+  - name
+  - health
+  - mana
+  - attribute
+  - flag
+  _lastFetchTimeTicks: 639124895191297976

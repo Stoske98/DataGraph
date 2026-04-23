@@ -12,8 +12,8 @@ namespace DataGraph.GoogleSheets
     /// <summary>
     /// ISheetProvider implementation for Google Sheets API v4.
     /// Supports multiple authentication methods through IAuthStrategy:
-    /// V1: API Key (public sheets), OAuth 2.0 (private sheets).
-    /// V2: Service Account.
+    /// API Key (public sheets), OAuth 2.0 (private sheets),
+    /// Service Account (CI/CD, headless environments).
     /// </summary>
     internal sealed class GoogleSheetsProvider : ISheetProvider
     {
@@ -26,14 +26,18 @@ namespace DataGraph.GoogleSheets
         {
             var apiKey = new ApiKeyStrategy();
             var oauth = new OAuthStrategy();
+            var serviceAccount = new ServiceAccountStrategy();
 
             _strategies[apiKey.MethodId] = apiKey;
             _strategies[oauth.MethodId] = oauth;
+            _strategies[serviceAccount.MethodId] = serviceAccount;
 
             if (apiKey.IsConfigured)
                 _activeStrategy = apiKey;
             else if (oauth.IsConfigured)
                 _activeStrategy = oauth;
+            else if (serviceAccount.IsConfigured)
+                _activeStrategy = serviceAccount;
         }
 
         public string ProviderId => "GoogleSheets";
@@ -84,6 +88,16 @@ namespace DataGraph.GoogleSheets
             return await strategy.AuthenticateAsync(cancellationToken);
         }
 
+        /// <summary>
+        /// Configures and activates Service Account authentication.
+        /// </summary>
+        public void ConfigureServiceAccount(string keyFilePath)
+        {
+            var strategy = (ServiceAccountStrategy)_strategies["ServiceAccount"];
+            strategy.SetKeyFilePath(keyFilePath);
+            _activeStrategy = strategy;
+        }
+
         public async Task<Result<RawTableData>> FetchAsync(
             SheetReference reference,
             CancellationToken cancellationToken = default)
@@ -109,7 +123,8 @@ namespace DataGraph.GoogleSheets
             if (_activeStrategy == null)
                 return Result<RawTableData>.Failure(
                     "No authentication method configured. " +
-                    "Set an API Key or sign in with OAuth in DataGraph settings.");
+                    "Set an API Key, sign in with OAuth, or configure a " +
+                    "Service Account in DataGraph settings.");
 
             var credResult = await _activeStrategy.GetCredentialsAsync(cancellationToken);
             if (credResult.IsFailure)

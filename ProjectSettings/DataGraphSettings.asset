@@ -9,11 +9,10 @@
             "_generatedFolder": "Assets/DataGraph/Generated"
         },
         "_codeGeneration": {
-            "_namespace": "DataGraph.Data",
-            "_autoParseOnSave": true
+            "_namespace": "DataGraph.Data"
         },
         "_editor": {
-            "_autoRefreshJsonPreview": true
+            "_columnDisplayMode": 0
         }
     }
 }

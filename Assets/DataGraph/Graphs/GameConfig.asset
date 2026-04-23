@@ -1,0 +1,89 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 078ea1d5631c38f479ac166f80c4ad04, type: 3}
+  m_Name: GameConfig
+  m_EditorClassIdentifier: DataGraph.Editor::DataGraph.Editor.DataGraphAsset
+  _graphName: GameConfig
+  _sheetId: https://docs.google.com/spreadsheets/d/1rG-RIIKPiJE2pSM_iSrgOIqMCSuA0qtPM1ZCtufzbFk/edit?usp=sharing
+  _sheetName: GameConfig
+  _headerRowOffset: 1
+  _graphType: 2
+  _nodes:
+  - _guid: a2720b91-efa0-4b5d-be53-6206d575bb35
+    _typeName: Root
+    _position: {x: -46, y: -42.5}
+    _isFixed: 1
+    _properties: []
+  - _guid: 997bd77f-5af9-4f91-8274-536c445b5669
+    _typeName: Object
+    _position: {x: 74, y: -42.5}
+    _isFixed: 1
+    _properties:
+    - _key: TypeName
+      _value: GameConfig
+  - _guid: af237ace-e0c1-4cb9-8ae2-c091cdef0e97
+    _typeName: NumberField
+    _position: {x: 406.6667, y: -194}
+    _isFixed: 0
+    _properties:
+    - _key: Column
+      _value: A
+    - _key: NumberType
+      _value: Int
+    - _key: FieldName
+      _value: maxPlayer
+  - _guid: b2800c16-7f5d-431e-8eaa-b0284f4fc89c
+    _typeName: NumberField
+    _position: {x: 410.6667, y: -38.666668}
+    _isFixed: 0
+    _properties:
+    - _key: Column
+      _value: B
+    - _key: NumberType
+      _value: Float
+    - _key: FieldName
+      _value: tickeRate
+  - _guid: dd5ef17a-1c11-4f80-9604-6c6abb8aef60
+    _typeName: BoolField
+    _position: {x: 412, y: 115.33333}
+    _isFixed: 0
+    _properties:
+    - _key: Column
+      _value: C
+    - _key: FieldName
+      _value: debug
+  _edges:
+  - _outputNodeGuid: a2720b91-efa0-4b5d-be53-6206d575bb35
+    _outputPortName: Children
+    _inputNodeGuid: 997bd77f-5af9-4f91-8274-536c445b5669
+    _inputPortName: Parent
+    _isFixed: 1
+  - _outputNodeGuid: 997bd77f-5af9-4f91-8274-536c445b5669
+    _outputPortName: Children
+    _inputNodeGuid: af237ace-e0c1-4cb9-8ae2-c091cdef0e97
+    _inputPortName: Parent
+    _isFixed: 0
+  - _outputNodeGuid: 997bd77f-5af9-4f91-8274-536c445b5669
+    _outputPortName: Children
+    _inputNodeGuid: b2800c16-7f5d-431e-8eaa-b0284f4fc89c
+    _inputPortName: Parent
+    _isFixed: 0
+  - _outputNodeGuid: 997bd77f-5af9-4f91-8274-536c445b5669
+    _outputPortName: Children
+    _inputNodeGuid: dd5ef17a-1c11-4f80-9604-6c6abb8aef60
+    _inputPortName: Parent
+    _isFixed: 0
+  _cachedHeaders:
+  - MaxPlayers
+  - TickRate
+  - DebugMode
+  _lastFetchTimeTicks: 639124886320013667
