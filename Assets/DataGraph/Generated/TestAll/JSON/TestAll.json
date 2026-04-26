@@ -1,0 +1,46 @@
+{
+  "1": {
+    "dmg": 50,
+    "speed": 1.5,
+    "isRare": true,
+    "spawnPont": {"x":1,"y":2,"z":3},
+    "pos": {"x":10,"y":20},
+    "tint": {"r":1,"g":0,"b":0,"a":1},
+    "damage": {
+      "score": 100,
+      "tags": [
+        "fire",
+        "ice"
+      ]
+    }
+  },
+  "2": {
+    "dmg": 30,
+    "speed": 0.8,
+    "isRare": false,
+    "spawnPont": {"x":4,"y":5,"z":6},
+    "pos": {"x":5,"y":15},
+    "tint": {"r":0,"g":1,"b":0,"a":1},
+    "damage": {
+      "score": 200,
+      "tags": [
+        "defense"
+      ]
+    }
+  },
+  "3": {
+    "dmg": 80,
+    "speed": 2,
+    "isRare": true,
+    "spawnPont": {"x":7,"y":8,"z":9},
+    "pos": {"x":20,"y":30},
+    "tint": {"r":0,"g":0,"b":1,"a":1},
+    "damage": {
+      "score": 300,
+      "tags": [
+        "magic",
+        "holy"
+      ]
+    }
+  }
+}

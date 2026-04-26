@@ -14,11 +14,9 @@ namespace DataGraph.Editor
         private const string AssetPath = "ProjectSettings/DataGraphSettings.asset";
 
         [SerializeField] private PathSettings _paths = new();
-        [SerializeField] private CodeGenSettings _codeGeneration = new();
         [SerializeField] private EditorBehavior _editor = new();
 
         public PathSettings Paths => _paths;
-        public CodeGenSettings CodeGeneration => _codeGeneration;
         public EditorBehavior Editor => _editor;
 
         private static DataGraphSettings _instance;
@@ -70,18 +68,6 @@ namespace DataGraph.Editor
             {
                 get => _generatedFolder;
                 set => _generatedFolder = value?.Replace('\\', '/').TrimEnd('/') ?? _generatedFolder;
-            }
-        }
-
-        [Serializable]
-        internal sealed class CodeGenSettings
-        {
-            [SerializeField] private string _namespace = "DataGraph.Data";
-
-            public string Namespace
-            {
-                get => _namespace;
-                set => _namespace = string.IsNullOrWhiteSpace(value) ? "DataGraph.Data" : value.Trim();
             }
         }
 

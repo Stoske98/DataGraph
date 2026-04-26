@@ -8,9 +8,6 @@
             "_graphsFolder": "Assets/DataGraph/Graphs",
             "_generatedFolder": "Assets/DataGraph/Generated"
         },
-        "_codeGeneration": {
-            "_namespace": "DataGraph.Data"
-        },
         "_editor": {
             "_columnDisplayMode": 0
         }

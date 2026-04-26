@@ -162,6 +162,9 @@ namespace DataGraph.Editor.Serialization
                 case float f:
                     sb.Append(f.ToString("G", CultureInfo.InvariantCulture));
                     break;
+                case double d:
+                    sb.Append(d.ToString("G", CultureInfo.InvariantCulture));
+                    break;
                 case bool b:
                     sb.Append(b ? "true" : "false");
                     break;

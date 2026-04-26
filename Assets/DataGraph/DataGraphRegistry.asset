@@ -14,6 +14,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: DataGraph.Runtime::DataGraph.Runtime.DataGraphRegistry
   _soAssets:
   - {fileID: 11400000, guid: 42f1ae6a55506344bbf91a15f8c41784, type: 2}
+  - {fileID: 11400000, guid: b72ef6e7d2bc5fe49b9a6d4c5f199dd2, type: 2}
   _blobEntries:
   - builderTypeName: DataGraph.Data.HeroGraphBlobDatabaseBuilder, Assembly-CSharp
     blobFileName: HeroGraph.blob
+  - builderTypeName: DataGraph.Data.TestAllBlobDatabaseBuilder, Assembly-CSharp
+    blobFileName: TestAll.blob

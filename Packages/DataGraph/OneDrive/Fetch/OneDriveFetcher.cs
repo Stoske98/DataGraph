@@ -15,6 +15,8 @@ namespace DataGraph.OneDrive.Fetch
     /// via Microsoft Graph API v1.0. Converts usedRange JSON into
     /// RawTableData. Uses manual JSON parsing for the values 2D array
     /// because Unity's JsonUtility cannot deserialize jagged arrays.
+    /// Supports both user-delegated (/me/drive) and app-only
+    /// (/drives/{driveId}) access patterns.
     /// </summary>
     internal sealed class OneDriveFetcher
     {
@@ -22,12 +24,14 @@ namespace DataGraph.OneDrive.Fetch
 
         private readonly string _clientId;
         private readonly string _tenantId;
+        private readonly bool _isAppOnly;
         private string _accessToken;
 
-        internal OneDriveFetcher(string clientId, string tenantId)
+        internal OneDriveFetcher(string clientId, string tenantId, bool isAppOnly = false)
         {
             _clientId = clientId;
             _tenantId = tenantId;
+            _isAppOnly = isAppOnly;
         }
 
         /// <summary>
@@ -44,15 +48,17 @@ namespace DataGraph.OneDrive.Fetch
             if (tokenResult.IsFailure)
                 return Result<RawTableData>.Failure(tokenResult.Error);
 
-            var itemIdResult = await ResolveItemIdAsync(itemDescriptor, ct);
-            if (itemIdResult.IsFailure)
-                return Result<RawTableData>.Failure(itemIdResult.Error);
+            var itemResult = await ResolveItemAsync(itemDescriptor, ct);
+            if (itemResult.IsFailure)
+                return Result<RawTableData>.Failure(itemResult.Error);
+
+            var itemPath = itemResult.Value;
 
             if (columns != null && columns.Count > 0)
                 return await FetchColumnsAsync(
-                    itemIdResult.Value, worksheetName, columns, ct);
+                    itemPath, worksheetName, columns, ct);
 
-            return await FetchUsedRangeAsync(itemIdResult.Value, worksheetName, ct);
+            return await FetchUsedRangeAsync(itemPath, worksheetName, ct);
         }
 
         /// <summary>
@@ -60,12 +66,11 @@ namespace DataGraph.OneDrive.Fetch
         /// Each column is fetched as "{col}:{col}" range, then merged into full-width rows.
         /// </summary>
         private async Task<Result<RawTableData>> FetchColumnsAsync(
-            string itemId, string worksheetName, IReadOnlyList<string> columns,
+            string itemPath, string worksheetName, IReadOnlyList<string> columns,
             CancellationToken ct)
         {
             var encodedSheet = Uri.EscapeDataString(worksheetName);
 
-            // Map column letters to indices
             var columnIndices = new int[columns.Count];
             int maxColIndex = 0;
             for (int i = 0; i < columns.Count; i++)
@@ -76,7 +81,6 @@ namespace DataGraph.OneDrive.Fetch
             }
             int totalColumns = maxColIndex + 1;
 
-            // Fetch each column
             var columnData = new List<string[]>[columns.Count];
             int maxRowCount = 0;
 
@@ -84,7 +88,7 @@ namespace DataGraph.OneDrive.Fetch
             {
                 var colLetter = columns[i];
                 var rangeAddress = $"{colLetter}:{colLetter}";
-                var url = $"{GraphBaseUrl}/me/drive/items/{itemId}" +
+                var url = $"{GraphBaseUrl}/{itemPath}" +
                           $"/workbook/worksheets('{encodedSheet}')" +
                           $"/range(address='{rangeAddress}')" +
                           "?$select=values";
@@ -103,7 +107,6 @@ namespace DataGraph.OneDrive.Fetch
             if (maxRowCount == 0)
                 return Result<RawTableData>.Failure("All fetched columns are empty.");
 
-            // Merge into full-width rows
             var allRows = new string[maxRowCount][];
             for (int row = 0; row < maxRowCount; row++)
             {
@@ -121,7 +124,6 @@ namespace DataGraph.OneDrive.Fetch
                 allRows[row] = rowData;
             }
 
-            // First row is header, rest is data
             if (maxRowCount < 2)
                 return Result<RawTableData>.Failure(
                     "Fetched columns have only a header row but no data.");
@@ -145,11 +147,11 @@ namespace DataGraph.OneDrive.Fetch
             if (tokenResult.IsFailure)
                 return Result<List<string>>.Failure(tokenResult.Error);
 
-            var itemIdResult = await ResolveItemIdAsync(itemDescriptor, ct);
-            if (itemIdResult.IsFailure)
-                return Result<List<string>>.Failure(itemIdResult.Error);
+            var itemResult = await ResolveItemAsync(itemDescriptor, ct);
+            if (itemResult.IsFailure)
+                return Result<List<string>>.Failure(itemResult.Error);
 
-            var url = $"{GraphBaseUrl}/me/drive/items/{itemIdResult.Value}" +
+            var url = $"{GraphBaseUrl}/{itemResult.Value}" +
                       "/workbook/worksheets?$select=name";
 
             var response = await SendGraphRequestAsync(url, ct);
@@ -169,10 +171,10 @@ namespace DataGraph.OneDrive.Fetch
         }
 
         private async Task<Result<RawTableData>> FetchUsedRangeAsync(
-            string itemId, string worksheetName, CancellationToken ct)
+            string itemPath, string worksheetName, CancellationToken ct)
         {
             var encodedSheet = Uri.EscapeDataString(worksheetName);
-            var url = $"{GraphBaseUrl}/me/drive/items/{itemId}" +
+            var url = $"{GraphBaseUrl}/{itemPath}" +
                       $"/workbook/worksheets('{encodedSheet}')/usedRange" +
                       "?$select=values";
 
@@ -211,18 +213,41 @@ namespace DataGraph.OneDrive.Fetch
 
         // ==================== ITEM RESOLUTION ====================
 
-        private async Task<Result<string>> ResolveItemIdAsync(
+        /// <summary>
+        /// Resolves a descriptor to a Graph API item path segment.
+        /// For user-delegated: "me/drive/items/{itemId}"
+        /// For app-only with share links: "shares/u!{encoded}/driveItem"
+        /// For app-only with item IDs: resolved through shares API first.
+        /// </summary>
+        private async Task<Result<string>> ResolveItemAsync(
             string descriptor, CancellationToken ct)
         {
             if (string.IsNullOrEmpty(descriptor))
                 return Result<string>.Failure("Item descriptor is empty.");
+
             if (descriptor.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+            {
+                if (_isAppOnly)
+                    return await ResolveShareLinkForAppOnlyAsync(descriptor, ct);
                 return await ResolveShareLinkAsync(descriptor, ct);
+            }
+
             if (descriptor.StartsWith("/"))
+            {
+                if (_isAppOnly)
+                    return Result<string>.Failure(
+                        "Path-based resolution (/path/to/file) is not supported " +
+                        "with App-Only auth. Use a share link or item ID instead.");
                 return await ResolveDrivePathAsync(descriptor, ct);
-            return Result<string>.Success(descriptor);
+            }
+
+            return Result<string>.Success($"me/drive/items/{descriptor}");
         }
 
+        /// <summary>
+        /// For user-delegated auth: resolves share link to item ID,
+        /// then uses /me/drive/items/{id} path.
+        /// </summary>
         private async Task<Result<string>> ResolveShareLinkAsync(
             string shareUrl, CancellationToken ct)
         {
@@ -239,7 +264,23 @@ namespace DataGraph.OneDrive.Fetch
             var id = ExtractJsonStringField(response.Value, "id");
             return string.IsNullOrEmpty(id)
                 ? Result<string>.Failure("Share link resolved but no item ID.")
-                : Result<string>.Success(id);
+                : Result<string>.Success($"me/drive/items/{id}");
+        }
+
+        /// <summary>
+        /// For app-only auth: uses shares endpoint directly without /me/.
+        /// The shares/{shareId}/driveItem path works with application
+        /// permissions and doesn't require a user context.
+        /// </summary>
+        private Task<Result<string>> ResolveShareLinkForAppOnlyAsync(
+            string shareUrl, CancellationToken ct)
+        {
+            var encoded = Convert.ToBase64String(
+                    Encoding.UTF8.GetBytes(shareUrl))
+                .TrimEnd('=').Replace('/', '_').Replace('+', '-');
+
+            return Task.FromResult(
+                Result<string>.Success($"shares/u!{encoded}/driveItem"));
         }
 
         private async Task<Result<string>> ResolveDrivePathAsync(
@@ -255,7 +296,7 @@ namespace DataGraph.OneDrive.Fetch
             var id = ExtractJsonStringField(response.Value, "id");
             return string.IsNullOrEmpty(id)
                 ? Result<string>.Failure("Path resolved but no item ID.")
-                : Result<string>.Success(id);
+                : Result<string>.Success($"me/drive/items/{id}");
         }
 
         // ==================== HTTP ====================
@@ -290,13 +331,11 @@ namespace DataGraph.OneDrive.Fetch
         private async Task<Result<string>> RefreshAndRetryAsync(
             string url, CancellationToken ct)
         {
-            var refreshResult = await OneDriveOAuthFlow.RefreshAccessTokenAsync(
-                _clientId, _tenantId, OneDriveCredentials.RefreshToken, ct);
-            if (refreshResult.IsFailure)
+            _accessToken = null;
+            var tokenResult = await EnsureAccessTokenAsync(ct);
+            if (tokenResult.IsFailure)
                 return Result<string>.Failure(
-                    $"Token refresh failed: {refreshResult.Error}");
-
-            _accessToken = refreshResult.Value;
+                    $"Token refresh failed: {tokenResult.Error}");
 
             using var request = UnityWebRequest.Get(url);
             request.SetRequestHeader("Authorization", $"Bearer {_accessToken}");
@@ -320,18 +359,35 @@ namespace DataGraph.OneDrive.Fetch
             if (!string.IsNullOrEmpty(_accessToken))
                 return Result<bool>.Success(true);
 
+            if (_isAppOnly)
+            {
+                var clientSecret = OneDriveCredentials.ClientSecret;
+                if (string.IsNullOrEmpty(clientSecret))
+                    return Result<bool>.Failure(
+                        "OneDrive App-Only: Client Secret is not configured. " +
+                        "Set it in Project Settings > DataGraph.");
+
+                var result = await OneDriveAppOnlyFlow.GetAccessTokenAsync(
+                    _clientId, _tenantId, clientSecret, ct);
+                if (result.IsFailure)
+                    return Result<bool>.Failure(result.Error);
+
+                _accessToken = result.Value;
+                return Result<bool>.Success(true);
+            }
+
             var refreshToken = OneDriveCredentials.RefreshToken;
             if (string.IsNullOrEmpty(refreshToken))
                 return Result<bool>.Failure(
                     "OneDrive not authenticated. " +
                     "Sign in through Project Settings > DataGraph.");
 
-            var result = await OneDriveOAuthFlow.RefreshAccessTokenAsync(
+            var pkceResult = await OneDriveOAuthFlow.RefreshAccessTokenAsync(
                 _clientId, _tenantId, refreshToken, ct);
-            if (result.IsFailure)
-                return Result<bool>.Failure(result.Error);
+            if (pkceResult.IsFailure)
+                return Result<bool>.Failure(pkceResult.Error);
 
-            _accessToken = result.Value;
+            _accessToken = pkceResult.Value;
             return Result<bool>.Success(true);
         }
 
@@ -411,7 +467,6 @@ namespace DataGraph.OneDrive.Fetch
                     continue;
                 }
 
-                // Handle unquoted values (numbers, booleans, null)
                 if (c != ',' && c != ' ' && c != '\n' && c != '\r' && c != '\t')
                 {
                     var value = ParseUnquotedValue(json, pos, out int valEnd);

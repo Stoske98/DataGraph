@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TestAll",
+  "type": "object",
+  "additionalProperties": {
+    "type": "object",
+    "properties": {
+      "dmg": {"type": "integer"},
+      "speed": {"type": "object"},
+      "isRare": {"type": "boolean"},
+      "spawnPont": {"type": "object"},
+      "pos": {"type": "object"},
+      "tint": {"type": "object"},
+      "damage": {
+        "type": "object",
+        "properties": {
+          "score": {"type": "integer"},
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

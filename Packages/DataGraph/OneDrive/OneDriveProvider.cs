@@ -23,7 +23,7 @@ namespace DataGraph.OneDrive
     {
         public string ProviderId => "OneDrive";
         public string DisplayName => "OneDrive";
-        public bool IsAuthenticated => OneDriveCredentials.IsConfigured;
+        public bool IsAuthenticated => OneDriveCredentials.IsActiveAuthConfigured;
 
         public async Task<Result<RawTableData>> FetchAsync(
             SheetReference reference,
@@ -34,11 +34,25 @@ namespace DataGraph.OneDrive
                 ? reference.Range
                 : "Sheet1";
 
+            if (OneDriveCredentials.IsAppOnlyConfigured
+                && OneDriveCredentials.AuthMode == 1)
+            {
+                var fetcher = new OneDriveFetcher(
+                    OneDriveCredentials.ClientId,
+                    OneDriveCredentials.TenantId,
+                    isAppOnly: true);
+
+                return await fetcher.FetchAsync(
+                    descriptor, worksheetName, cancellationToken,
+                    reference.Columns);
+            }
+
             if (OneDriveCredentials.IsConfigured)
             {
                 var fetcher = new OneDriveFetcher(
                     OneDriveCredentials.ClientId,
-                    OneDriveCredentials.TenantId);
+                    OneDriveCredentials.TenantId,
+                    isAppOnly: false);
 
                 return await fetcher.FetchAsync(
                     descriptor, worksheetName, cancellationToken,

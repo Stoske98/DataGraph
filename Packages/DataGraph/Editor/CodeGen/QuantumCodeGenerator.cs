@@ -141,6 +141,10 @@ namespace DataGraph.Editor.CodeGen
                 case ParseableAssetField asset:
                     w.Line($"public UnityEngine.{AssetTypeMapper.GetCSharpTypeName(asset.AssetType)} {asset.FieldName};");
                     break;
+                case ParseableArrayField arr:
+                    var elementType = GetArrayElementQuantumType(arr, sim: false);
+                    w.Line($"public List<{elementType}> {arr.FieldName} = new();");
+                    break;
             }
         }
 
@@ -281,11 +285,21 @@ namespace DataGraph.Editor.CodeGen
                 ParseableEnumField => true,
                 ParseableFlagField => true,
                 ParseableObjectField => true,
-                ParseableArrayField => true,
+                ParseableArrayField arr => IsArraySimulationSafe(arr),
                 ParseableDictionaryField => true,
                 ParseableAssetField => false,
                 _ => false
             };
+        }
+
+        private static bool IsArraySimulationSafe(ParseableArrayField arr)
+        {
+            if (arr.Children.Count == 0) return true;
+            foreach (var child in arr.Children)
+            {
+                if (!IsSimulationSafe(child)) return false;
+            }
+            return true;
         }
 
         private static bool IsSimSafeType(FieldValueType type)
@@ -314,7 +328,8 @@ namespace DataGraph.Editor.CodeGen
                 FieldValueType.Bool => "bool",
                 FieldValueType.Vector2 => "FPVector2",
                 FieldValueType.Vector3 => "FPVector3",
-                _ => "int"
+                _ => throw new InvalidOperationException(
+                    $"FieldValueType.{type} is not simulation-safe and should not reach GetQuantumSimType.")
             };
         }
 

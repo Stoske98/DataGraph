@@ -1,0 +1,214 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 078ea1d5631c38f479ac166f80c4ad04, type: 3}
+  m_Name: TestAll
+  m_EditorClassIdentifier: DataGraph.Editor::DataGraph.Editor.DataGraphAsset
+  _graphName: TestAll
+  _sheetId: https://1drv.ms/x/c/2288ab75ad4712c2/IQCCBzvfQcpjS4rmgFnu1sZpARBfxdBf8qJNhA1aJZOzDbY
+  _sheetName: TestAll
+  _headerRowOffset: 1
+  _graphType: 0
+  _nodes:
+  - _guid: d389b9ae-16d6-4f65-8282-8589bebf951c
+    _typeName: Root
+    _position: {x: -46, y: -42.5}
+    _isFixed: 1
+    _properties: []
+  - _guid: ebd9d55d-f345-47e1-9d62-7d031524c9aa
+    _typeName: Dictionary
+    _position: {x: 74, y: -42.5}
+    _isFixed: 1
+    _properties:
+    - _key: KeyColumn
+      _value: A
+    - _key: KeyType
+      _value: Int
+  - _guid: 9a62a84a-033e-46c7-9481-cc1ed273c853
+    _typeName: Object
+    _position: {x: 314, y: -42.5}
+    _isFixed: 1
+    _properties:
+    - _key: TypeName
+      _value: Item
+  - _guid: dab06e31-9964-4978-9a2c-3c5b446c11fb
+    _typeName: NumberField
+    _position: {x: 593.3334, y: -188.66667}
+    _isFixed: 0
+    _properties:
+    - _key: Column
+      _value: C
+    - _key: NumberType
+      _value: Int
+    - _key: FieldName
+      _value: dmg
+  - _guid: 88471c69-7a3a-4e12-abbd-62d252a3c734
+    _typeName: NumberField
+    _position: {x: 595.3334, y: -23.333334}
+    _isFixed: 0
+    _properties:
+    - _key: Column
+      _value: D
+    - _key: NumberType
+      _value: Double
+    - _key: FieldName
+      _value: speed
+  - _guid: fb4299f8-e049-4e9b-94e2-be45395c1aaa
+    _typeName: BoolField
+    _position: {x: 596.6666, y: 179.33333}
+    _isFixed: 0
+    _properties:
+    - _key: Column
+      _value: E
+    - _key: FieldName
+      _value: isRare
+  - _guid: 7bd0c4f7-84b7-4e52-a807-d2bbf281b943
+    _typeName: Vector3Field
+    _position: {x: 590, y: 334}
+    _isFixed: 0
+    _properties:
+    - _key: Column
+      _value: G
+    - _key: Separator
+      _value: '|'
+    - _key: FieldName
+      _value: spawnPont
+  - _guid: 0310a3c1-79ec-4d57-ab25-505422f40b86
+    _typeName: Vector2Field
+    _position: {x: 584, y: 513.3333}
+    _isFixed: 0
+    _properties:
+    - _key: Column
+      _value: F
+    - _key: Separator
+      _value: ','
+    - _key: FieldName
+      _value: pos
+  - _guid: 7fbe3bab-ebeb-4f7f-b469-840134981ea6
+    _typeName: ColorField
+    _position: {x: 336.00003, y: -310}
+    _isFixed: 0
+    _properties:
+    - _key: Column
+      _value: H
+    - _key: Format
+      _value: Hex
+    - _key: FieldName
+      _value: tint
+  - _guid: 3137c9d0-b03e-4ca9-a3b6-a42d0d25f8fc
+    _typeName: Object
+    _position: {x: -2.6666565, y: 164}
+    _isFixed: 0
+    _properties:
+    - _key: TypeName
+      _value: Damage
+    - _key: FieldName
+      _value: damage
+  - _guid: dd94bd58-5446-4837-90de-bdfa38666b72
+    _typeName: HorizontalArray
+    _position: {x: 93.33334, y: 426}
+    _isFixed: 0
+    _properties:
+    - _key: Separator
+      _value: ','
+    - _key: FieldName
+      _value: tags
+  - _guid: 21bd8989-e567-4764-882c-7b0197c22169
+    _typeName: StringField
+    _position: {x: 308.66666, y: 433.33334}
+    _isFixed: 0
+    _properties:
+    - _key: Column
+      _value: I
+  - _guid: ef2ff7d0-ccce-4f62-ae3b-2893abd91570
+    _typeName: NumberField
+    _position: {x: 305.33337, y: 156}
+    _isFixed: 0
+    _properties:
+    - _key: Column
+      _value: J
+    - _key: NumberType
+      _value: Int
+    - _key: FieldName
+      _value: score
+  _edges:
+  - _outputNodeGuid: d389b9ae-16d6-4f65-8282-8589bebf951c
+    _outputPortName: Children
+    _inputNodeGuid: ebd9d55d-f345-47e1-9d62-7d031524c9aa
+    _inputPortName: Parent
+    _isFixed: 1
+  - _outputNodeGuid: ebd9d55d-f345-47e1-9d62-7d031524c9aa
+    _outputPortName: Children
+    _inputNodeGuid: 9a62a84a-033e-46c7-9481-cc1ed273c853
+    _inputPortName: Parent
+    _isFixed: 1
+  - _outputNodeGuid: 9a62a84a-033e-46c7-9481-cc1ed273c853
+    _outputPortName: Children
+    _inputNodeGuid: dab06e31-9964-4978-9a2c-3c5b446c11fb
+    _inputPortName: Parent
+    _isFixed: 0
+  - _outputNodeGuid: 9a62a84a-033e-46c7-9481-cc1ed273c853
+    _outputPortName: Children
+    _inputNodeGuid: 88471c69-7a3a-4e12-abbd-62d252a3c734
+    _inputPortName: Parent
+    _isFixed: 0
+  - _outputNodeGuid: 9a62a84a-033e-46c7-9481-cc1ed273c853
+    _outputPortName: Children
+    _inputNodeGuid: fb4299f8-e049-4e9b-94e2-be45395c1aaa
+    _inputPortName: Parent
+    _isFixed: 0
+  - _outputNodeGuid: 9a62a84a-033e-46c7-9481-cc1ed273c853
+    _outputPortName: Children
+    _inputNodeGuid: 7bd0c4f7-84b7-4e52-a807-d2bbf281b943
+    _inputPortName: Parent
+    _isFixed: 0
+  - _outputNodeGuid: 9a62a84a-033e-46c7-9481-cc1ed273c853
+    _outputPortName: Children
+    _inputNodeGuid: 0310a3c1-79ec-4d57-ab25-505422f40b86
+    _inputPortName: Parent
+    _isFixed: 0
+  - _outputNodeGuid: 9a62a84a-033e-46c7-9481-cc1ed273c853
+    _outputPortName: Children
+    _inputNodeGuid: 7fbe3bab-ebeb-4f7f-b469-840134981ea6
+    _inputPortName: Parent
+    _isFixed: 0
+  - _outputNodeGuid: 9a62a84a-033e-46c7-9481-cc1ed273c853
+    _outputPortName: Children
+    _inputNodeGuid: 3137c9d0-b03e-4ca9-a3b6-a42d0d25f8fc
+    _inputPortName: Parent
+    _isFixed: 0
+  - _outputNodeGuid: dd94bd58-5446-4837-90de-bdfa38666b72
+    _outputPortName: Children
+    _inputNodeGuid: 21bd8989-e567-4764-882c-7b0197c22169
+    _inputPortName: Parent
+    _isFixed: 0
+  - _outputNodeGuid: 3137c9d0-b03e-4ca9-a3b6-a42d0d25f8fc
+    _outputPortName: Children
+    _inputNodeGuid: ef2ff7d0-ccce-4f62-ae3b-2893abd91570
+    _inputPortName: Parent
+    _isFixed: 0
+  - _outputNodeGuid: 3137c9d0-b03e-4ca9-a3b6-a42d0d25f8fc
+    _outputPortName: Children
+    _inputNodeGuid: dd94bd58-5446-4837-90de-bdfa38666b72
+    _inputPortName: Parent
+    _isFixed: 0
+  _cachedHeaders:
+  - id
+  - name
+  - damage
+  - speed
+  - isRare
+  - pos
+  - spawnPoint
+  - tint
+  - tags
+  - score
+  _lastFetchTimeTicks: 639128068359358173

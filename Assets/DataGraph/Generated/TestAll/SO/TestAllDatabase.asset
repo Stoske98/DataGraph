@@ -1,0 +1,45 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9499be4d0e866c042b6a7b40e6349a35, type: 3}
+  m_Name: TestAllDatabase
+  m_EditorClassIdentifier: Assembly-CSharp::DataGraph.Data.TestAllDatabase
+  _keys: 010000000200000003000000
+  _values:
+  - dmg: 50
+    isRare: 1
+    spawnPont: {x: 1, y: 2, z: 3}
+    pos: {x: 10, y: 20}
+    tint: {r: 1, g: 0, b: 0, a: 1}
+    damage:
+      score: 100
+      tags:
+      - fire
+      - ice
+  - dmg: 30
+    isRare: 0
+    spawnPont: {x: 4, y: 5, z: 6}
+    pos: {x: 5, y: 15}
+    tint: {r: 0, g: 1, b: 0, a: 1}
+    damage:
+      score: 200
+      tags:
+      - defense
+  - dmg: 80
+    isRare: 1
+    spawnPont: {x: 7, y: 8, z: 9}
+    pos: {x: 20, y: 30}
+    tint: {r: 0, g: 0, b: 1, a: 1}
+    damage:
+      score: 300
+      tags:
+      - magic
+      - holy

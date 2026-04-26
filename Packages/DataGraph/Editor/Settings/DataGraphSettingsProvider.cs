@@ -22,6 +22,8 @@ namespace DataGraph.Editor
         private const string OneDriveClientIdKey = "DataGraph.Credentials.OneDrive.ClientId";
         private const string OneDriveTenantIdKey = "DataGraph.Credentials.OneDrive.TenantId";
         private const string OneDriveRefreshTokenKey = "DataGraph.Credentials.OneDrive.RefreshToken";
+        private const string OneDriveClientSecretKey = "DataGraph.Credentials.OneDrive.ClientSecret";
+        private const string OneDriveAuthModeKey = "DataGraph.Credentials.OneDrive.AuthMode";
 
         private const string GsApiKeyPref = "DataGraph_Google_ApiKey";
         private const string GsClientIdPref = "DataGraph_Google_OAuthClientId";
@@ -41,18 +43,24 @@ namespace DataGraph.Editor
 
         private bool _connectionsFoldout = true;
         private bool _pathsFoldout = true;
-        private bool _codeGenFoldout = true;
         private bool _editorFoldout = true;
         private bool _aboutFoldout;
         private bool _googleFoldout = true;
         private bool _oneDriveFoldout = true;
         private int _gsAuthMethod;
+        private int _odAuthMethod;
 
         private static readonly string[] GoogleAuthMethodLabels =
         {
             "API Key",
             "OAuth 2.0",
             "Service Account"
+        };
+
+        private static readonly string[] OneDriveAuthMethodLabels =
+        {
+            "OAuth 2.0 (PKCE)",
+            "App-Only (Client Credentials)"
         };
 
         private DataGraphSettingsProvider()
@@ -65,7 +73,7 @@ namespace DataGraph.Editor
             {
                 keywords = new HashSet<string>
                 {
-                    "DataGraph", "Google Sheets", "OneDrive", "Namespace",
+                    "DataGraph", "Google Sheets", "OneDrive",
                     "Parse", "JSON", "Preview", "OAuth", "API Key",
                     "Service Account"
                 }
@@ -77,6 +85,7 @@ namespace DataGraph.Editor
         {
             _settings = DataGraphSettings.Instance;
             _gsAuthMethod = EditorPrefs.GetInt(GsAuthMethodPref, 0);
+            _odAuthMethod = EditorPrefs.GetInt(OneDriveAuthModeKey, 0);
         }
 
         public override void OnGUI(string searchContext)
@@ -86,7 +95,6 @@ namespace DataGraph.Editor
             EditorGUILayout.Space(4);
             DrawConnectionsSection();
             DrawPathsSection();
-            DrawCodeGenerationSection();
             DrawEditorSection();
             DrawAboutSection();
             if (EditorGUI.EndChangeCheck())
@@ -436,6 +444,14 @@ namespace DataGraph.Editor
                 return;
             }
 
+            var newOdMethod = EditorGUILayout.Popup("Auth Method",
+                _odAuthMethod, OneDriveAuthMethodLabels);
+            if (newOdMethod != _odAuthMethod)
+            {
+                _odAuthMethod = newOdMethod;
+                EditorPrefs.SetInt(OneDriveAuthModeKey, newOdMethod);
+            }
+
             var clientId = EditorPrefs.GetString(OneDriveClientIdKey, "");
             var newClientId = EditorGUILayout.TextField("Client ID", clientId);
             if (newClientId != clientId)
@@ -446,10 +462,21 @@ namespace DataGraph.Editor
             if (newTenantId != tenantId)
                 EditorPrefs.SetString(OneDriveTenantIdKey, newTenantId);
 
+            EditorGUILayout.Space(4);
+
+            if (_odAuthMethod == 0)
+                DrawOneDrivePkceAuth(newClientId, newTenantId);
+            else
+                DrawOneDriveAppOnlyAuth(newClientId, newTenantId);
+
+            EditorGUI.indentLevel--;
+        }
+
+        private void DrawOneDrivePkceAuth(string clientId, string tenantId)
+        {
             var hasRefresh = !string.IsNullOrEmpty(
                 EditorPrefs.GetString(OneDriveRefreshTokenKey, ""));
 
-            EditorGUILayout.Space(4);
             EditorGUILayout.BeginHorizontal();
             GUILayout.FlexibleSpace();
 
@@ -460,18 +487,46 @@ namespace DataGraph.Editor
             }
             else
             {
-                EditorGUI.BeginDisabledGroup(string.IsNullOrEmpty(newClientId));
+                EditorGUI.BeginDisabledGroup(string.IsNullOrEmpty(clientId));
                 if (GUILayout.Button("Sign In", GUILayout.Width(80)))
-                    InvokeOneDriveSignIn(newClientId, newTenantId);
+                    InvokeOneDriveSignIn(clientId, tenantId);
                 EditorGUI.EndDisabledGroup();
             }
 
             EditorGUILayout.EndHorizontal();
+            DrawStatusDot(hasRefresh);
+        }
 
-            var isConfigured = !string.IsNullOrEmpty(newClientId) && hasRefresh;
+        private void DrawOneDriveAppOnlyAuth(string clientId, string tenantId)
+        {
+            var clientSecret = EditorPrefs.GetString(OneDriveClientSecretKey, "");
+            var newSecret = EditorGUILayout.PasswordField("Client Secret", clientSecret);
+            if (newSecret != clientSecret)
+                EditorPrefs.SetString(OneDriveClientSecretKey, newSecret);
+
+            if (string.IsNullOrEmpty(tenantId) || tenantId == "common")
+            {
+                EditorGUILayout.HelpBox(
+                    "App-Only auth requires a specific Tenant ID. " +
+                    "'common' is not supported with client credentials flow.",
+                    MessageType.Warning);
+            }
+
+            var isConfigured = !string.IsNullOrEmpty(clientId)
+                               && !string.IsNullOrEmpty(newSecret)
+                               && !string.IsNullOrEmpty(tenantId)
+                               && tenantId != "common";
+
+            EditorGUILayout.Space(4);
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.FlexibleSpace();
+            EditorGUI.BeginDisabledGroup(string.IsNullOrEmpty(newSecret));
+            if (GUILayout.Button("Clear Secret", GUILayout.Width(100)))
+                EditorPrefs.DeleteKey(OneDriveClientSecretKey);
+            EditorGUI.EndDisabledGroup();
+            EditorGUILayout.EndHorizontal();
+
             DrawStatusDot(isConfigured);
-
-            EditorGUI.indentLevel--;
         }
 
         private static void InvokeOneDriveSignIn(string clientId, string tenantId)
@@ -503,24 +558,6 @@ namespace DataGraph.Editor
                     v => _settings.Paths.GraphsFolder = v);
                 DrawFolderField("Generated Output", _settings.Paths.GeneratedFolder,
                     v => _settings.Paths.GeneratedFolder = v);
-                EditorGUI.indentLevel--;
-            }
-            EditorGUILayout.EndFoldoutHeaderGroup();
-        }
-
-        // ==================== CODE GENERATION ====================
-
-        private void DrawCodeGenerationSection()
-        {
-            _codeGenFoldout = EditorGUILayout.BeginFoldoutHeaderGroup(
-                _codeGenFoldout, "Code Generation");
-            if (_codeGenFoldout)
-            {
-                EditorGUI.indentLevel++;
-                var ns = EditorGUILayout.TextField("Namespace",
-                    _settings.CodeGeneration.Namespace);
-                if (ns != _settings.CodeGeneration.Namespace)
-                    _settings.CodeGeneration.Namespace = ns;
                 EditorGUI.indentLevel--;
             }
             EditorGUILayout.EndFoldoutHeaderGroup();
