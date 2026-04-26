@@ -18,6 +18,7 @@ namespace DataGraph.Editor.CodeGen
                 FieldValueType.String => "string",
                 FieldValueType.Int => "int",
                 FieldValueType.Float => "float",
+                FieldValueType.Double => "double",
                 FieldValueType.Bool => "bool",
                 FieldValueType.Vector2 => "Vector2",
                 FieldValueType.Vector3 => "Vector3",

@@ -227,7 +227,7 @@ namespace DataGraph.Tests.Editor
                 .WithRoot(new ParseableDictionaryRoot("Item", "A", KeyType.Int, new ParseableNode[]
                 {
                     new ParseableCustomField("name", "B", FieldValueType.String),
-                    new ParseableArrayField("rewards", "Reward", ArrayMode.Vertical, "C", null, new ParseableNode[]
+                    new ParseableArrayField("rewards", null, ArrayMode.Vertical, "C", null, new ParseableNode[]
                     {
                         new ParseableCustomField("gold", "D", FieldValueType.Int),
                     }),

@@ -187,6 +187,126 @@ namespace DataGraph.Tests.Editor
             Assert.IsTrue(result.IsFailure);
         }
 
+        [Test]
+        public void DoubleValue_SerializesAsNumber()
+        {
+            var tree = MakeTree(new ParsedObject(null, "Config", new ParsedNode[]
+            {
+                new ParsedValue("ratio", 3.14, typeof(double)),
+            }));
+
+            var serializer = new JsonDataSerializer(prettyPrint: false);
+            var result = serializer.Serialize(tree);
+
+            Assert.IsTrue(result.IsSuccess);
+            Assert.IsTrue(result.Value.Contains("\"ratio\":3.14"));
+            Assert.IsFalse(result.Value.Contains("\"ratio\":\"3.14\""));
+        }
+
+        [Test]
+        public void Vector2Value_SerializesAsJsonObject()
+        {
+            var tree = MakeTree(new ParsedObject(null, "Item", new ParsedNode[]
+            {
+                new ParsedValue("pos", new UnityEngine.Vector2(1f, 2f), typeof(UnityEngine.Vector2)),
+            }));
+
+            var serializer = new JsonDataSerializer(prettyPrint: false);
+            var result = serializer.Serialize(tree);
+
+            Assert.IsTrue(result.IsSuccess);
+            Assert.IsTrue(result.Value.Contains("\"pos\":{\"x\":1,\"y\":2}"));
+        }
+
+        [Test]
+        public void Vector3Value_SerializesAsJsonObject()
+        {
+            var tree = MakeTree(new ParsedObject(null, "Item", new ParsedNode[]
+            {
+                new ParsedValue("dir", new UnityEngine.Vector3(0f, 1f, 0f), typeof(UnityEngine.Vector3)),
+            }));
+
+            var serializer = new JsonDataSerializer(prettyPrint: false);
+            var result = serializer.Serialize(tree);
+
+            Assert.IsTrue(result.IsSuccess);
+            Assert.IsTrue(result.Value.Contains("\"dir\":{\"x\":0,\"y\":1,\"z\":0}"));
+        }
+
+        [Test]
+        public void ColorValue_SerializesAsJsonObject()
+        {
+            var tree = MakeTree(new ParsedObject(null, "Item", new ParsedNode[]
+            {
+                new ParsedValue("tint", new UnityEngine.Color(1f, 0f, 0f, 1f), typeof(UnityEngine.Color)),
+            }));
+
+            var serializer = new JsonDataSerializer(prettyPrint: false);
+            var result = serializer.Serialize(tree);
+
+            Assert.IsTrue(result.IsSuccess);
+            Assert.IsTrue(result.Value.Contains("\"tint\":{\"r\":1,\"g\":0,\"b\":0,\"a\":1}"));
+        }
+
+        [Test]
+        public void NestedDictionary_SerializesAsNestedObject()
+        {
+            var tree = MakeTree(new ParsedObject(null, "Item", new ParsedNode[]
+            {
+                new ParsedDictionary("bonuses", "string", "int",
+                    new Dictionary<object, ParsedNode>
+                    {
+                        { "fire", new ParsedValue(null, 10, typeof(int)) },
+                    }),
+            }));
+
+            var serializer = new JsonDataSerializer(prettyPrint: false);
+            var result = serializer.Serialize(tree);
+
+            Assert.IsTrue(result.IsSuccess);
+            Assert.IsTrue(result.Value.Contains("\"bonuses\":{\"fire\":10}"));
+        }
+
+        [Test]
+        public void AssetReference_SerializesAsPathString()
+        {
+            var tree = MakeTree(new ParsedObject(null, "Item", new ParsedNode[]
+            {
+                new ParsedAssetReference("icon", "Assets/Art/sword.png", AssetType.Sprite),
+            }));
+
+            var serializer = new JsonDataSerializer(prettyPrint: false);
+            var result = serializer.Serialize(tree);
+
+            Assert.IsTrue(result.IsSuccess);
+            Assert.IsTrue(result.Value.Contains("\"icon\":\"Assets/Art/sword.png\""));
+        }
+
+        [Test]
+        public void EmptyDictionary_SerializesAsEmptyObject()
+        {
+            var tree = MakeTree(new ParsedDictionary(null, "string", "int",
+                new Dictionary<object, ParsedNode>()));
+
+            var serializer = new JsonDataSerializer(prettyPrint: false);
+            var result = serializer.Serialize(tree);
+
+            Assert.IsTrue(result.IsSuccess);
+            Assert.AreEqual("{}", result.Value);
+        }
+
+        [Test]
+        public void EmptyArray_SerializesAsEmptyArray()
+        {
+            var tree = MakeTree(new ParsedArray(null, "Item", new ParsedNode[0]));
+
+            var serializer = new JsonDataSerializer(prettyPrint: false);
+            var result = serializer.Serialize(tree);
+
+            Assert.IsTrue(result.IsSuccess);
+            Assert.AreEqual("[]", result.Value);
+        }
+
         private static ParsedDataTree MakeTree(ParsedNode root)
         {
             var graph = new ParseableGraphBuilder()
