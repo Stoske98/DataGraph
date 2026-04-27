@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using DataGraph.Runtime;
@@ -11,6 +12,10 @@ namespace DataGraph.Data
     /// </summary>
     public class DictionaryDatabaseAsset<TKey, TValue> : DataGraphDatabaseAsset, ISerializationCallbackReceiver
     {
+        /// <summary>
+        /// The value type used as the registration key in Database.
+        /// </summary>
+        public override Type EntryType => typeof(TValue);
         [SerializeField] private List<TKey> _keys = new();
         [SerializeField] private List<TValue> _values = new();
 

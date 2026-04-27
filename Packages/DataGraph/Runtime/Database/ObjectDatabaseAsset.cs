@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using DataGraph.Runtime;
 
@@ -9,6 +10,10 @@ namespace DataGraph.Data
     /// </summary>
     public class ObjectDatabaseAsset<TValue> : DataGraphDatabaseAsset
     {
+        /// <summary>
+        /// The value type used as the registration key in Database.
+        /// </summary>
+        public override Type EntryType => typeof(TValue);
         [SerializeField] private TValue _data;
 
         /// <summary>

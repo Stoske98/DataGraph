@@ -11,6 +11,10 @@ namespace DataGraph.Data
     /// </summary>
     public class ArrayDatabaseAsset<TValue> : DataGraphDatabaseAsset
     {
+        /// <summary>
+        /// The value type used as the registration key in Database.
+        /// </summary>
+        public override Type EntryType => typeof(TValue);
         [SerializeField] private List<TValue> _entries = new();
 
         /// <summary>

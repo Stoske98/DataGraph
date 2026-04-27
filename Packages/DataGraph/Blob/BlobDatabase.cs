@@ -114,6 +114,13 @@ namespace DataGraph.Data
         }
 
         /// <summary>
+        /// All currently registered entry types. Used by DataGraphLoader
+        /// to snapshot registrations before and after a blob load
+        /// so it can track and later unregister only its own entries.
+        /// </summary>
+        internal static IReadOnlyCollection<Type> RegisteredEntryTypes => _handles.Keys;
+
+        /// <summary>
         /// Removes the blob database registered for the given entry type.
         /// Disposes the underlying BlobAssetReference if found.
         /// Does nothing if the entry type is not registered.
