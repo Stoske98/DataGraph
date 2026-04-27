@@ -307,6 +307,41 @@ namespace DataGraph.Tests.Editor
             Assert.AreEqual("[]", result.Value);
         }
 
+        [Test]
+        public void SerializeTwice_DifferentTrees_NoStateLeakage()
+        {
+            var serializer = new JsonDataSerializer(prettyPrint: true);
+
+            var tree1 = MakeTree(new ParsedObject(null, "Item", new ParsedNode[]
+            {
+                new ParsedValue("name", "Sword", typeof(string)),
+            }));
+
+            var tree2 = MakeTree(new ParsedObject(null, "Config", new ParsedNode[]
+            {
+                new ParsedValue("level", 5, typeof(int)),
+                new ParsedObject("nested", "Stats", new ParsedNode[]
+                {
+                    new ParsedValue("hp", 100, typeof(int)),
+                    new ParsedValue("mp", 50, typeof(int)),
+                }),
+            }));
+
+            var result1 = serializer.Serialize(tree1);
+            var result2 = serializer.Serialize(tree2);
+
+            Assert.IsTrue(result1.IsSuccess);
+            Assert.IsTrue(result2.IsSuccess);
+
+            var fresh1 = new JsonDataSerializer(prettyPrint: true).Serialize(tree1);
+            var fresh2 = new JsonDataSerializer(prettyPrint: true).Serialize(tree2);
+
+            Assert.AreEqual(fresh1.Value, result1.Value,
+                "First result must match a fresh-instance serialization of the same tree.");
+            Assert.AreEqual(fresh2.Value, result2.Value,
+                "Second result must match a fresh-instance serialization of the same tree.");
+        }
+
         private static ParsedDataTree MakeTree(ParsedNode root)
         {
             var graph = new ParseableGraphBuilder()
