@@ -23,7 +23,6 @@ namespace DataGraph.GoogleSheets.Auth
         private const string Scope = "https://www.googleapis.com/auth/spreadsheets.readonly";
         private const string AuthEndpoint = "https://accounts.google.com/o/oauth2/v2/auth";
         private const string TokenEndpoint = "https://oauth2.googleapis.com/token";
-        private const string RedirectUri = "http://localhost:8080";
 
         public string MethodId => "OAuth";
         public string DisplayName => "OAuth 2.0 (private sheets)";
@@ -59,12 +58,12 @@ namespace DataGraph.GoogleSheets.Auth
 
             try
             {
-                var codeResult = await ListenForAuthCodeAsync(clientId, cancellationToken);
+                var (codeResult, redirectUri) = await ListenForAuthCodeAsync(clientId, cancellationToken);
                 if (codeResult.IsFailure)
                     return Result<bool>.Failure(codeResult.Error);
 
                 var tokenResult = await ExchangeCodeAsync(
-                    clientId, GetClientSecret(), codeResult.Value, cancellationToken);
+                    clientId, GetClientSecret(), codeResult.Value, redirectUri, cancellationToken);
                 if (tokenResult.IsFailure)
                     return Result<bool>.Failure(tokenResult.Error);
 
@@ -110,19 +109,24 @@ namespace DataGraph.GoogleSheets.Auth
             EditorPrefs.DeleteKey(TokenPrefsKey);
         }
 
-        private async Task<Result<string>> ListenForAuthCodeAsync(
+        private async Task<(Result<string> result, string redirectUri)> ListenForAuthCodeAsync(
             string clientId, CancellationToken cancellationToken)
         {
+            var port = FindAvailablePort();
+            var redirectUri = $"http://localhost:{port}/";
+            var state = Guid.NewGuid().ToString("N");
+
             var authUrl = $"{AuthEndpoint}" +
                           $"?client_id={Uri.EscapeDataString(clientId)}" +
-                          $"&redirect_uri={Uri.EscapeDataString(RedirectUri)}" +
+                          $"&redirect_uri={Uri.EscapeDataString(redirectUri)}" +
                           $"&response_type=code" +
                           $"&scope={Uri.EscapeDataString(Scope)}" +
                           $"&access_type=offline" +
-                          $"&prompt=consent";
+                          $"&prompt=consent" +
+                          $"&state={state}";
 
             var listener = new HttpListener();
-            listener.Prefixes.Add(RedirectUri + "/");
+            listener.Prefixes.Add(redirectUri);
 
             try
             {
@@ -135,7 +139,7 @@ namespace DataGraph.GoogleSheets.Auth
                     Task.Delay(Timeout.Infinite, cancellationToken));
 
                 if (completed != contextTask)
-                    return Result<string>.Failure("Authorization timed out or was cancelled.");
+                    return (Result<string>.Failure("Authorization timed out or was cancelled."), redirectUri);
 
                 var context = contextTask.Result;
                 var code = context.Request.QueryString["code"];
@@ -153,11 +157,13 @@ namespace DataGraph.GoogleSheets.Auth
                 context.Response.Close();
 
                 if (!string.IsNullOrEmpty(error))
-                    return Result<string>.Failure($"Authorization denied: {error}");
+                    return (Result<string>.Failure($"Authorization denied: {error}"), redirectUri);
+                if (context.Request.QueryString["state"] != state)
+                    return (Result<string>.Failure("OAuth state mismatch — possible CSRF attempt."), redirectUri);
                 if (string.IsNullOrEmpty(code))
-                    return Result<string>.Failure("No authorization code received.");
+                    return (Result<string>.Failure("No authorization code received."), redirectUri);
 
-                return Result<string>.Success(code);
+                return (Result<string>.Success(code), redirectUri);
             }
             finally
             {
@@ -166,15 +172,24 @@ namespace DataGraph.GoogleSheets.Auth
             }
         }
 
+        private static int FindAvailablePort()
+        {
+            var l = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
+            l.Start();
+            var port = ((IPEndPoint)l.LocalEndpoint).Port;
+            l.Stop();
+            return port;
+        }
+
         private static async Task<Result<OAuthToken>> ExchangeCodeAsync(
             string clientId, string clientSecret, string code,
-            CancellationToken cancellationToken)
+            string redirectUri, CancellationToken cancellationToken)
         {
             var form = new WWWForm();
             form.AddField("client_id", clientId);
             form.AddField("client_secret", clientSecret);
             form.AddField("code", code);
-            form.AddField("redirect_uri", RedirectUri);
+            form.AddField("redirect_uri", redirectUri);
             form.AddField("grant_type", "authorization_code");
 
             return await PostTokenRequestAsync(form, null, cancellationToken);
@@ -205,7 +220,7 @@ namespace DataGraph.GoogleSheets.Auth
             while (!operation.isDone)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                await Task.Yield();
+                await Task.Delay(50, cancellationToken);
             }
 
             if (request.result != UnityWebRequest.Result.Success)
