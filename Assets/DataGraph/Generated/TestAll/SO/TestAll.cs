@@ -13,7 +13,7 @@ namespace DataGraph.Data
     public class Item : DataGraphEntry
     {
         public int dmg;
-        public object speed;
+        public double speed;
         public bool isRare;
         public Vector3 spawnPont;
         public Vector2 pos;

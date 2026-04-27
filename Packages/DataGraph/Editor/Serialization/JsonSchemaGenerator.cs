@@ -89,7 +89,18 @@ namespace DataGraph.Editor.Serialization
             switch (node)
             {
                 case ParseableCustomField custom:
-                    Ln(sb, $"\"{fieldName}\": {{\"type\": \"{GetJsonType(custom.ValueType)}\"}}" + Trail(isLast));
+                    if (IsStructuredType(custom.ValueType))
+                    {
+                        Ln(sb, $"\"{fieldName}\": {{");
+                        _indent++;
+                        WriteStructuredValueSchema(sb, custom.ValueType);
+                        _indent--;
+                        Ln(sb, "}" + Trail(isLast));
+                    }
+                    else
+                    {
+                        Ln(sb, $"\"{fieldName}\": {{\"type\": \"{GetJsonPrimitiveType(custom.ValueType)}\"}}" + Trail(isLast));
+                    }
                     break;
 
                 case ParseableAssetField _:
@@ -124,9 +135,16 @@ namespace DataGraph.Editor.Serialization
                     Ln(sb, "\"additionalProperties\": {");
                     _indent++;
                     if (dict.Children.Count == 1 && dict.Children[0] is ParseableCustomField singleLeaf)
-                        Ln(sb, $"\"type\": \"{GetJsonType(singleLeaf.ValueType)}\"");
+                    {
+                        if (IsStructuredType(singleLeaf.ValueType))
+                            WriteStructuredValueSchema(sb, singleLeaf.ValueType);
+                        else
+                            Ln(sb, $"\"type\": \"{GetJsonPrimitiveType(singleLeaf.ValueType)}\"");
+                    }
                     else
+                    {
                         WriteObjectProperties(sb, dict.Children);
+                    }
                     _indent--;
                     Ln(sb, "}");
                     _indent--;
@@ -139,7 +157,10 @@ namespace DataGraph.Editor.Serialization
         {
             if (arr.Children.Count == 1 && arr.Children[0] is ParseableCustomField leaf)
             {
-                Ln(sb, $"\"type\": \"{GetJsonType(leaf.ValueType)}\"");
+                if (IsStructuredType(leaf.ValueType))
+                    WriteStructuredValueSchema(sb, leaf.ValueType);
+                else
+                    Ln(sb, $"\"type\": \"{GetJsonPrimitiveType(leaf.ValueType)}\"");
             }
             else
             {
@@ -147,16 +168,67 @@ namespace DataGraph.Editor.Serialization
             }
         }
 
-        private static string GetJsonType(FieldValueType valueType)
+        private void WriteStructuredValueSchema(StringBuilder sb, FieldValueType valueType)
+        {
+            switch (valueType)
+            {
+                case FieldValueType.Vector2:
+                    Ln(sb, "\"type\": \"object\",");
+                    Ln(sb, "\"properties\": {");
+                    _indent++;
+                    Ln(sb, "\"x\": {\"type\": \"number\"},");
+                    Ln(sb, "\"y\": {\"type\": \"number\"}");
+                    _indent--;
+                    Ln(sb, "},");
+                    Ln(sb, "\"required\": [\"x\", \"y\"]");
+                    break;
+
+                case FieldValueType.Vector3:
+                    Ln(sb, "\"type\": \"object\",");
+                    Ln(sb, "\"properties\": {");
+                    _indent++;
+                    Ln(sb, "\"x\": {\"type\": \"number\"},");
+                    Ln(sb, "\"y\": {\"type\": \"number\"},");
+                    Ln(sb, "\"z\": {\"type\": \"number\"}");
+                    _indent--;
+                    Ln(sb, "},");
+                    Ln(sb, "\"required\": [\"x\", \"y\", \"z\"]");
+                    break;
+
+                case FieldValueType.Color:
+                    Ln(sb, "\"type\": \"object\",");
+                    Ln(sb, "\"properties\": {");
+                    _indent++;
+                    Ln(sb, "\"r\": {\"type\": \"number\"},");
+                    Ln(sb, "\"g\": {\"type\": \"number\"},");
+                    Ln(sb, "\"b\": {\"type\": \"number\"},");
+                    Ln(sb, "\"a\": {\"type\": \"number\"}");
+                    _indent--;
+                    Ln(sb, "},");
+                    Ln(sb, "\"required\": [\"r\", \"g\", \"b\", \"a\"]");
+                    break;
+
+                default:
+                    throw new InvalidOperationException($"WriteStructuredValueSchema called for non-structured type: {valueType}");
+            }
+        }
+
+        private static bool IsStructuredType(FieldValueType valueType) =>
+            valueType == FieldValueType.Vector2 ||
+            valueType == FieldValueType.Vector3 ||
+            valueType == FieldValueType.Color;
+
+        private static string GetJsonPrimitiveType(FieldValueType valueType)
         {
             return valueType switch
             {
                 FieldValueType.String => "string",
                 FieldValueType.Int => "integer",
                 FieldValueType.Float => "number",
+                FieldValueType.Double => "number",
                 FieldValueType.Bool => "boolean",
                 FieldValueType.Enum => "string",
-                _ => "object"
+                _ => throw new InvalidOperationException($"Unsupported FieldValueType: {valueType}")
             };
         }
 

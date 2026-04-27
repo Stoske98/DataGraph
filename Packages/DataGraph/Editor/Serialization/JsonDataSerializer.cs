@@ -15,7 +15,6 @@ namespace DataGraph.Editor.Serialization
     {
         private readonly bool _prettyPrint;
         private readonly NullHandling _nullHandling;
-        private int _indent;
 
         /// <summary>
         /// How null values are handled in the JSON output.
@@ -43,7 +42,7 @@ namespace DataGraph.Editor.Serialization
             try
             {
                 var sb = new StringBuilder();
-                WriteNode(sb, tree.Root);
+                WriteNode(sb, tree.Root, 0);
                 if (_prettyPrint) sb.AppendLine();
                 return Result<string>.Success(sb.ToString());
             }
@@ -53,18 +52,18 @@ namespace DataGraph.Editor.Serialization
             }
         }
 
-        private void WriteNode(StringBuilder sb, ParsedNode node)
+        private void WriteNode(StringBuilder sb, ParsedNode node, int indent)
         {
             switch (node)
             {
                 case ParsedDictionary dict:
-                    WriteDictionary(sb, dict);
+                    WriteDictionary(sb, dict, indent);
                     break;
                 case ParsedArray arr:
-                    WriteArray(sb, arr);
+                    WriteArray(sb, arr, indent);
                     break;
                 case ParsedObject obj:
-                    WriteObject(sb, obj);
+                    WriteObject(sb, obj, indent);
                     break;
                 case ParsedValue val:
                     WriteValue(sb, val);
@@ -75,51 +74,46 @@ namespace DataGraph.Editor.Serialization
             }
         }
 
-        private void WriteDictionary(StringBuilder sb, ParsedDictionary dict)
+        private void WriteDictionary(StringBuilder sb, ParsedDictionary dict, int indent)
         {
             sb.Append('{');
-            _indent++;
             bool first = true;
 
             foreach (var kvp in dict.Entries)
             {
                 if (!first) sb.Append(',');
                 first = false;
-                NewLine(sb);
+                NewLine(sb, indent + 1);
                 WriteJsonString(sb, kvp.Key.ToString());
                 sb.Append(':');
                 if (_prettyPrint) sb.Append(' ');
-                WriteNode(sb, kvp.Value);
+                WriteNode(sb, kvp.Value, indent + 1);
             }
 
-            _indent--;
-            if (!first) NewLine(sb);
+            if (!first) NewLine(sb, indent);
             sb.Append('}');
         }
 
-        private void WriteArray(StringBuilder sb, ParsedArray arr)
+        private void WriteArray(StringBuilder sb, ParsedArray arr, int indent)
         {
             sb.Append('[');
-            _indent++;
             bool first = true;
 
             foreach (var element in arr.Elements)
             {
                 if (!first) sb.Append(',');
                 first = false;
-                NewLine(sb);
-                WriteNode(sb, element);
+                NewLine(sb, indent + 1);
+                WriteNode(sb, element, indent + 1);
             }
 
-            _indent--;
-            if (!first) NewLine(sb);
+            if (!first) NewLine(sb, indent);
             sb.Append(']');
         }
 
-        private void WriteObject(StringBuilder sb, ParsedObject obj)
+        private void WriteObject(StringBuilder sb, ParsedObject obj, int indent)
         {
             sb.Append('{');
-            _indent++;
             bool first = true;
 
             foreach (var child in obj.Children)
@@ -131,15 +125,14 @@ namespace DataGraph.Editor.Serialization
 
                 if (!first) sb.Append(',');
                 first = false;
-                NewLine(sb);
+                NewLine(sb, indent + 1);
                 WriteJsonString(sb, child.FieldName ?? "");
                 sb.Append(':');
                 if (_prettyPrint) sb.Append(' ');
-                WriteNode(sb, child);
+                WriteNode(sb, child, indent + 1);
             }
 
-            _indent--;
-            if (!first) NewLine(sb);
+            if (!first) NewLine(sb, indent);
             sb.Append('}');
         }
 
@@ -206,12 +199,12 @@ namespace DataGraph.Editor.Serialization
             sb.Append('"');
         }
 
-        private void NewLine(StringBuilder sb)
+        private void NewLine(StringBuilder sb, int indent)
         {
             if (_prettyPrint)
             {
                 sb.AppendLine();
-                sb.Append(' ', _indent * 2);
+                sb.Append(' ', indent * 2);
             }
         }
     }

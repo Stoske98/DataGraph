@@ -18,8 +18,6 @@ namespace DataGraph.Editor.Serialization
     /// </summary>
     internal sealed class SODataSerializer
     {
-        private Dictionary<string, UnityEngine.Object> _assetCache;
-
         /// <summary>
         /// Creates the database SO asset at the given path.
         /// Generated C# classes must be compiled before this runs.
@@ -42,19 +40,19 @@ namespace DataGraph.Editor.Serialization
                 if (entryType == null)
                     return Result<string>.Failure($"Type '{entryTypeName}' not found.");
 
-                _assetCache = PreloadAssets(tree.Root);
+                var assetCache = PreloadAssets(tree.Root);
                 var dbAsset = ScriptableObject.CreateInstance(dbType);
 
                 switch (tree.Root)
                 {
                     case ParsedDictionary dict:
-                        PopulateDictionary(dbAsset, dict, entryType);
+                        PopulateDictionary(dbAsset, dict, entryType, assetCache);
                         break;
                     case ParsedArray arr:
-                        PopulateArray(dbAsset, arr, entryType);
+                        PopulateArray(dbAsset, arr, entryType, assetCache);
                         break;
                     case ParsedObject obj:
-                        PopulateObject(dbAsset, obj, entryType);
+                        PopulateObject(dbAsset, obj, entryType, assetCache);
                         break;
                 }
 
@@ -76,7 +74,8 @@ namespace DataGraph.Editor.Serialization
             }
         }
 
-        private void PopulateDictionary(ScriptableObject dbAsset, ParsedDictionary dict, Type entryType)
+        private static void PopulateDictionary(ScriptableObject dbAsset, ParsedDictionary dict, Type entryType,
+            Dictionary<string, UnityEngine.Object> assetCache)
         {
             var setDataMethod = dbAsset.GetType().GetMethod("SetData",
                 BindingFlags.Public | BindingFlags.Instance);
@@ -91,14 +90,15 @@ namespace DataGraph.Editor.Serialization
                 var key = ConvertValue(keyType, kvp.Key);
                 keysList.Add(key);
 
-                var entry = CreateAndPopulate(entryType, kvp.Value);
+                var entry = CreateAndPopulate(entryType, kvp.Value, assetCache);
                 entriesList.Add(entry);
             }
 
             setDataMethod.Invoke(dbAsset, new object[] { keysList, entriesList });
         }
 
-        private void PopulateArray(ScriptableObject dbAsset, ParsedArray arr, Type entryType)
+        private static void PopulateArray(ScriptableObject dbAsset, ParsedArray arr, Type entryType,
+            Dictionary<string, UnityEngine.Object> assetCache)
         {
             var setDataMethod = dbAsset.GetType().GetMethod("SetData",
                 BindingFlags.Public | BindingFlags.Instance);
@@ -108,24 +108,26 @@ namespace DataGraph.Editor.Serialization
 
             foreach (var element in arr.Elements)
             {
-                var entry = CreateAndPopulate(entryType, element);
+                var entry = CreateAndPopulate(entryType, element, assetCache);
                 entriesList.Add(entry);
             }
 
             setDataMethod.Invoke(dbAsset, new object[] { entriesList });
         }
 
-        private void PopulateObject(ScriptableObject dbAsset, ParsedObject obj, Type entryType)
+        private static void PopulateObject(ScriptableObject dbAsset, ParsedObject obj, Type entryType,
+            Dictionary<string, UnityEngine.Object> assetCache)
         {
             var setDataMethod = dbAsset.GetType().GetMethod("SetData",
                 BindingFlags.Public | BindingFlags.Instance);
             if (setDataMethod == null) return;
 
-            var data = CreateAndPopulate(entryType, obj);
+            var data = CreateAndPopulate(entryType, obj, assetCache);
             setDataMethod.Invoke(dbAsset, new object[] { data });
         }
 
-        private object CreateAndPopulate(Type type, ParsedNode node)
+        private static object CreateAndPopulate(Type type, ParsedNode node,
+            Dictionary<string, UnityEngine.Object> assetCache)
         {
             if (node is ParsedObject obj)
             {
@@ -137,7 +139,7 @@ namespace DataGraph.Editor.Serialization
                         BindingFlags.Public | BindingFlags.Instance);
                     if (field == null) continue;
 
-                    var value = ResolveValue(field.FieldType, child);
+                    var value = ResolveValue(field.FieldType, child, assetCache);
                     if (value != null)
                         field.SetValue(instance, value);
                 }
@@ -151,18 +153,19 @@ namespace DataGraph.Editor.Serialization
             return null;
         }
 
-        private object ResolveValue(Type fieldType, ParsedNode node)
+        private static object ResolveValue(Type fieldType, ParsedNode node,
+            Dictionary<string, UnityEngine.Object> assetCache)
         {
             switch (node)
             {
                 case ParsedAssetReference assetRef:
-                    return ResolveAssetReference(assetRef);
+                    return ResolveAssetReference(assetRef, assetCache);
 
                 case ParsedValue val:
                     return ConvertValue(fieldType, val.Value);
 
                 case ParsedObject obj:
-                    return CreateAndPopulate(fieldType, obj);
+                    return CreateAndPopulate(fieldType, obj, assetCache);
 
                 case ParsedArray arr:
                 {
@@ -175,7 +178,7 @@ namespace DataGraph.Editor.Serialization
                     {
                         var item = element is ParsedValue pv
                             ? ConvertValue(elementType, pv.Value)
-                            : CreateAndPopulate(elementType, element);
+                            : CreateAndPopulate(elementType, element, assetCache);
                         if (item != null) list.Add(item);
                     }
                     return list;
@@ -192,7 +195,7 @@ namespace DataGraph.Editor.Serialization
                         var key = ConvertValue(keyType, kvp.Key);
                         var value = kvp.Value is ParsedValue pv
                             ? ConvertValue(valueType, pv.Value)
-                            : CreateAndPopulate(valueType, kvp.Value);
+                            : CreateAndPopulate(valueType, kvp.Value, assetCache);
                         if (key != null) dictInstance[key] = value;
                     }
                     return dictInstance;
@@ -240,12 +243,13 @@ namespace DataGraph.Editor.Serialization
 
             return Enum.Parse(enumType, string.Join(", ", parts), true);
         }
-        private object ResolveAssetReference(ParsedAssetReference assetRef)
+        private static object ResolveAssetReference(ParsedAssetReference assetRef,
+            Dictionary<string, UnityEngine.Object> assetCache)
         {
             if (string.IsNullOrEmpty(assetRef.AssetPath))
                 return null;
 
-            _assetCache.TryGetValue(assetRef.AssetPath, out var cached);
+            assetCache.TryGetValue(assetRef.AssetPath, out var cached);
             return cached;
         }
 

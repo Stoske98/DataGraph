@@ -15,6 +15,7 @@ MonoBehaviour:
   _keys: 010000000200000003000000
   _values:
   - dmg: 50
+    speed: 1.5
     isRare: 1
     spawnPont: {x: 1, y: 2, z: 3}
     pos: {x: 10, y: 20}
@@ -25,6 +26,7 @@ MonoBehaviour:
       - fire
       - ice
   - dmg: 30
+    speed: 0.8
     isRare: 0
     spawnPont: {x: 4, y: 5, z: 6}
     pos: {x: 5, y: 15}
@@ -34,6 +36,7 @@ MonoBehaviour:
       tags:
       - defense
   - dmg: 80
+    speed: 2
     isRare: 1
     spawnPont: {x: 7, y: 8, z: 9}
     pos: {x: 20, y: 30}
