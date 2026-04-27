@@ -11,6 +11,7 @@ using DataGraph.Editor.Parsing;
 using DataGraph.Editor.Serialization;
 using DataGraph.Editor.UI;
 using DataGraph.Runtime;
+using UnityEngine;
 using UnityEditor;
 
 namespace DataGraph.Editor.Commands
@@ -511,8 +512,9 @@ namespace DataGraph.Editor.Commands
                 UnityEditor.AssetDatabase.Refresh();
 
                 var blobFileName = $"{graphName}.blob";
+                var asmName = builderType.Assembly.GetName().Name;
                 UpdateRegistry(registry => registry.RegisterBlob(
-                    $"{builderTypeName}, Assembly-CSharp", blobFileName));
+                    $"{builderTypeName}, {asmName}", blobFileName));
 
                 log.LogSuccess($"Done: Blob asset created at {blobFilePath}");
                 log.Complete(true);

@@ -27,7 +27,7 @@ namespace DataGraph.Editor
             if (!Directory.Exists(targetDir))
                 Directory.CreateDirectory(targetDir);
 
-            var outputPath = EditorPrefs.GetString("DataGraph_OutputPath", "Assets/DataGraph/Generated");
+            var outputPath = DataGraphSettings.Instance.Paths.GeneratedFolder;
             var blobFiles = Directory.GetFiles(outputPath, "*.blob", SearchOption.AllDirectories);
 
             foreach (var blobFile in blobFiles)

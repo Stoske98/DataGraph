@@ -18,6 +18,12 @@ namespace DataGraph.Editor.Parsing
         {
             var entries = new List<ValidationEntry>();
 
+            if (tree == null)
+            {
+                entries.Add(new ValidationEntry(ValidationSeverity.Error, "ParsedDataTree is null"));
+                return new ValidationReport(entries);
+            }
+
             if (tree.Root == null)
             {
                 entries.Add(new ValidationEntry(

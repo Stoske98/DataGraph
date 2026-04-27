@@ -143,7 +143,7 @@ namespace DataGraph.Editor.Parsing
         {
             var trimmed = raw.Trim();
 
-            if (format == "hex" || trimmed.StartsWith("#"))
+            if (string.Equals(format, "hex", StringComparison.OrdinalIgnoreCase) || trimmed.StartsWith("#"))
             {
                 if (UnityEngine.ColorUtility.TryParseHtmlString(
                         trimmed.StartsWith("#") ? trimmed : "#" + trimmed,
@@ -152,7 +152,7 @@ namespace DataGraph.Editor.Parsing
                 return Result<object>.Failure($"Cannot parse '{raw}' as hex color.");
             }
 
-            if (format == "rgba")
+            if (string.Equals(format, "rgba", StringComparison.OrdinalIgnoreCase))
             {
                 var parts = trimmed.Split(',');
                 if (parts.Length < 3 || parts.Length > 4)

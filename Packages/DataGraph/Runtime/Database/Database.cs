@@ -75,6 +75,15 @@ namespace DataGraph.Runtime
         }
 
         /// <summary>
+        /// Removes the database registered for the given value type.
+        /// Does nothing if the type is not registered.
+        /// </summary>
+        public static void Unregister(Type valueType)
+        {
+            _databases.Remove(valueType);
+        }
+
+        /// <summary>
         /// Removes all registered databases. Typically called during
         /// cleanup or before re-parsing.
         /// </summary>

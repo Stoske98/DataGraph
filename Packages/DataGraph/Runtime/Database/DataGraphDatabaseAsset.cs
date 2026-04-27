@@ -9,6 +9,12 @@ namespace DataGraph.Data
     public abstract class DataGraphDatabaseAsset : ScriptableObject
     {
         /// <summary>
+        /// The value type used as the registration key in Database.
+        /// Returned so that DataGraphLoader can unregister only its own entries on destroy.
+        /// </summary>
+        public abstract Type EntryType { get; }
+
+        /// <summary>
         /// Registers this database asset into the Database static registry.
         /// Called by DatabaseLoader on startup.
         /// </summary>

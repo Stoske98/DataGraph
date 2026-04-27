@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using DataGraph.Runtime;
 
 namespace DataGraph.Editor.Adapter
 {
@@ -100,7 +101,8 @@ namespace DataGraph.Editor.Adapter
 
             var validHeaders = new HashSet<string>();
             foreach (var h in graph.CachedHeaders) validHeaders.Add(h);
-            for (int i = 0; i < 26; i++) validHeaders.Add(((char)('A' + i)).ToString());
+            for (int i = 0; i < graph.CachedHeaders.Count; i++)
+                validHeaders.Add(RawTableData.IndexToColumnLetter(i));
 
             foreach (var node in graph.Nodes)
             {

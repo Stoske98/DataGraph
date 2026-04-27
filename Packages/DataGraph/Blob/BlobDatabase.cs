@@ -65,6 +65,7 @@ namespace DataGraph.Data
     {
         private static readonly Dictionary<Type, object> _handles = new();
         private static readonly Dictionary<Type, object> _rawRefs = new();
+        private static readonly Dictionary<Type, Type> _entryToDatabaseType = new();
 
         /// <summary>
         /// Registers a blob database with a typed handle.
@@ -78,6 +79,7 @@ namespace DataGraph.Data
         {
             _handles[typeof(TEntry)] = handle;
             _rawRefs[typeof(TDatabase)] = blobRef;
+            _entryToDatabaseType[typeof(TEntry)] = typeof(TDatabase);
         }
 
         /// <summary>
@@ -112,6 +114,23 @@ namespace DataGraph.Data
         }
 
         /// <summary>
+        /// Removes the blob database registered for the given entry type.
+        /// Disposes the underlying BlobAssetReference if found.
+        /// Does nothing if the entry type is not registered.
+        /// </summary>
+        public static void Unregister(Type entryType)
+        {
+            _handles.Remove(entryType);
+            if (_entryToDatabaseType.TryGetValue(entryType, out var dbType))
+            {
+                if (_rawRefs.TryGetValue(dbType, out var raw) && raw is IDisposable disposable)
+                    disposable.Dispose();
+                _rawRefs.Remove(dbType);
+                _entryToDatabaseType.Remove(entryType);
+            }
+        }
+
+        /// <summary>
         /// Removes all registered blob databases and disposes references.
         /// </summary>
         public static void Clear()
@@ -123,6 +142,7 @@ namespace DataGraph.Data
             }
             _handles.Clear();
             _rawRefs.Clear();
+            _entryToDatabaseType.Clear();
         }
     }
 }
