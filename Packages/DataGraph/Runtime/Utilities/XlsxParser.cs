@@ -4,14 +4,16 @@ using System.IO;
 using System.IO.Compression;
 using System.Xml.Linq;
 
-namespace DataGraph.LocalFile
+namespace DataGraph.Runtime
 {
     /// <summary>
     /// Parses .xlsx files into a jagged string array.
     /// XLSX is a ZIP archive containing XML files. This parser reads
     /// shared strings, workbook sheet names, and worksheet cell data
     /// using only System.IO.Compression and System.Xml.Linq — no
-    /// external dependencies required.
+    /// external dependencies required. Accepts a file path, byte array,
+    /// or Stream so it can be reused by both LocalFileProvider and
+    /// OneDriveProvider (share-link fallback downloads bytes).
     /// </summary>
     internal static class XlsxParser
     {
@@ -30,14 +32,41 @@ namespace DataGraph.LocalFile
         public static string[][] Parse(string filePath, string sheetName = null)
         {
             using var stream = File.OpenRead(filePath);
-            using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+            return ParseFromStream(stream, sheetName, Path.GetFileName(filePath));
+        }
+
+        /// <summary>
+        /// Parses a worksheet from an in-memory .xlsx byte array.
+        /// Used for downloaded XLSX content (e.g. OneDrive share-link
+        /// fallback). If sheetName is null, reads the first sheet.
+        /// </summary>
+        public static string[][] Parse(byte[] xlsxBytes, string sheetName = null)
+        {
+            if (xlsxBytes == null) throw new ArgumentNullException(nameof(xlsxBytes));
+            using var stream = new MemoryStream(xlsxBytes, writable: false);
+            return ParseFromStream(stream, sheetName, "(in-memory)");
+        }
+
+        /// <summary>
+        /// Parses a worksheet from a Stream containing .xlsx data.
+        /// The caller retains ownership of the stream.
+        /// </summary>
+        public static string[][] Parse(Stream stream, string sheetName = null)
+        {
+            if (stream == null) throw new ArgumentNullException(nameof(stream));
+            return ParseFromStream(stream, sheetName, "(stream)");
+        }
+
+        private static string[][] ParseFromStream(Stream stream, string sheetName, string sourceLabel)
+        {
+            using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
 
             var sharedStrings = ReadSharedStrings(archive);
             var sheetPath = ResolveSheetPath(archive, sheetName);
 
             if (string.IsNullOrEmpty(sheetPath))
                 throw new InvalidOperationException(
-                    $"Sheet '{sheetName ?? "(first)"}' not found in '{Path.GetFileName(filePath)}'.");
+                    $"Sheet '{sheetName ?? "(first)"}' not found in '{sourceLabel}'.");
 
             return ReadSheet(archive, sheetPath, sharedStrings);
         }
@@ -48,7 +77,17 @@ namespace DataGraph.LocalFile
         public static List<string> GetSheetNames(string filePath)
         {
             using var stream = File.OpenRead(filePath);
-            using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+            return GetSheetNames(stream);
+        }
+
+        /// <summary>
+        /// Returns all sheet names in the workbook from a Stream.
+        /// The caller retains ownership of the stream.
+        /// </summary>
+        public static List<string> GetSheetNames(Stream stream)
+        {
+            if (stream == null) throw new ArgumentNullException(nameof(stream));
+            using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
 
             var names = new List<string>();
             var workbookEntry = archive.GetEntry("xl/workbook.xml");
