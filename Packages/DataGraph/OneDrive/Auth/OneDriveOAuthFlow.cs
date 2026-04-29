@@ -41,7 +41,14 @@ namespace DataGraph.OneDrive.Auth
 
             _cts?.Cancel();
             _cts = new CancellationTokenSource();
-            RunFlowAsync(clientId, tenantId, _cts.Token);
+            _ = RunFlowAsync(clientId, tenantId, _cts.Token)
+                .ContinueWith(t =>
+                {
+                    if (t.Exception != null)
+                        Debug.LogError(
+                            "[DataGraph] OneDrive auth flow crashed: " +
+                            t.Exception.GetBaseException().Message);
+                }, TaskContinuationOptions.OnlyOnFaulted);
         }
 
         /// <summary>
@@ -89,7 +96,7 @@ namespace DataGraph.OneDrive.Auth
             }
         }
 
-        private static async void RunFlowAsync(string clientId, string tenantId,
+        private static async Task RunFlowAsync(string clientId, string tenantId,
             CancellationToken ct)
         {
             var (codeVerifier, codeChallenge) = GeneratePkce();
