@@ -6,11 +6,35 @@
     "type": "object",
     "properties": {
       "dmg": {"type": "integer"},
-      "speed": {"type": "object"},
+      "speed": {"type": "number"},
       "isRare": {"type": "boolean"},
-      "spawnPont": {"type": "object"},
-      "pos": {"type": "object"},
-      "tint": {"type": "object"},
+      "spawnPont": {
+        "type": "object",
+        "properties": {
+          "x": {"type": "number"},
+          "y": {"type": "number"},
+          "z": {"type": "number"}
+        },
+        "required": ["x", "y", "z"]
+      },
+      "pos": {
+        "type": "object",
+        "properties": {
+          "x": {"type": "number"},
+          "y": {"type": "number"}
+        },
+        "required": ["x", "y"]
+      },
+      "tint": {
+        "type": "object",
+        "properties": {
+          "r": {"type": "number"},
+          "g": {"type": "number"},
+          "b": {"type": "number"},
+          "a": {"type": "number"}
+        },
+        "required": ["r", "g", "b", "a"]
+      },
       "damage": {
         "type": "object",
         "properties": {

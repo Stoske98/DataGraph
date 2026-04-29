@@ -264,49 +264,10 @@ namespace DataGraph.GoogleSheets.Fetch
                 }
                 if (valuesIdx > scanPos) break;
 
-                var values = ParseValuesArray(json, valuesIdx);
+                var values = JsonLite.ParseValuesArray(json, valuesIdx);
                 result.Add(values);
 
                 pos = valuesIdx + 10;
-            }
-
-            return result;
-        }
-
-        /// <summary>
-        /// Parses a "values" 2D array starting from the given position in JSON.
-        /// </summary>
-        private static List<string[]> ParseValuesArray(string json, int valuesKeyPos)
-        {
-            var result = new List<string[]>();
-
-            int outerArrayStart = json.IndexOf('[', valuesKeyPos);
-            if (outerArrayStart < 0) return result;
-
-            int pos = outerArrayStart + 1;
-            int depth = 1;
-
-            while (pos < json.Length && depth > 0)
-            {
-                char c = json[pos];
-
-                if (c == '[')
-                {
-                    if (depth == 1)
-                    {
-                        var row = ParseStringArray(json, pos, out int endPos);
-                        result.Add(row);
-                        pos = endPos;
-                        continue;
-                    }
-                    depth++;
-                }
-                else if (c == ']')
-                {
-                    depth--;
-                }
-
-                pos++;
             }
 
             return result;
@@ -320,7 +281,7 @@ namespace DataGraph.GoogleSheets.Fetch
             {
                 int valuesIndex = json.IndexOf("\"values\"", StringComparison.Ordinal);
                 var values = valuesIndex >= 0
-                    ? ParseValuesArray(json, valuesIndex)
+                    ? JsonLite.ParseValuesArray(json, valuesIndex)
                     : new List<string[]>();
 
                 if (values.Count == 0)
@@ -351,100 +312,6 @@ namespace DataGraph.GoogleSheets.Fetch
                 return Result<RawTableData>.Failure(
                     $"Failed to parse API response: {ex.Message}");
             }
-        }
-
-        // ==================== JSON PARSING ====================
-
-        private static string[] ParseStringArray(string json, int startPos, out int endPos)
-        {
-            var items = new List<string>();
-            int pos = startPos + 1;
-
-            while (pos < json.Length)
-            {
-                char c = json[pos];
-
-                if (c == ']')
-                {
-                    endPos = pos + 1;
-                    return items.ToArray();
-                }
-
-                if (c == '"')
-                {
-                    var value = ParseJsonString(json, pos, out int strEnd);
-                    items.Add(value);
-                    pos = strEnd;
-                    continue;
-                }
-
-                if (c != ',' && c != ' ' && c != '\n' && c != '\r' && c != '\t')
-                {
-                    var value = ParseUnquotedValue(json, pos, out int valEnd);
-                    items.Add(value);
-                    pos = valEnd;
-                    continue;
-                }
-
-                pos++;
-            }
-
-            endPos = pos;
-            return items.ToArray();
-        }
-
-        private static string ParseJsonString(string json, int startPos, out int endPos)
-        {
-            var sb = new System.Text.StringBuilder();
-            int pos = startPos + 1;
-
-            while (pos < json.Length)
-            {
-                char c = json[pos];
-
-                if (c == '\\' && pos + 1 < json.Length)
-                {
-                    char next = json[pos + 1];
-                    switch (next)
-                    {
-                        case '"': sb.Append('"'); break;
-                        case '\\': sb.Append('\\'); break;
-                        case 'n': sb.Append('\n'); break;
-                        case 'r': sb.Append('\r'); break;
-                        case 't': sb.Append('\t'); break;
-                        case '/': sb.Append('/'); break;
-                        default: sb.Append(next); break;
-                    }
-                    pos += 2;
-                    continue;
-                }
-
-                if (c == '"')
-                {
-                    endPos = pos + 1;
-                    return sb.ToString();
-                }
-
-                sb.Append(c);
-                pos++;
-            }
-
-            endPos = pos;
-            return sb.ToString();
-        }
-
-        private static string ParseUnquotedValue(string json, int startPos, out int endPos)
-        {
-            int pos = startPos;
-            while (pos < json.Length)
-            {
-                char c = json[pos];
-                if (c == ',' || c == ']' || c == '}') break;
-                pos++;
-            }
-            endPos = pos;
-            var value = json.Substring(startPos, pos - startPos).Trim();
-            return value == "null" ? "" : value;
         }
 
         private static Result<RawTableData> MapHttpError(UnityWebRequest request)

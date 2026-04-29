@@ -98,7 +98,7 @@ namespace DataGraph.OneDrive.Fetch
                     return Result<RawTableData>.Failure(
                         $"Failed to fetch column {colLetter}: {response.Error}");
 
-                var values = ParseValuesArray(response.Value);
+                var values = JsonLite.ParseValuesArray(response.Value);
                 columnData[i] = values;
                 if (values.Count > maxRowCount)
                     maxRowCount = values.Count;
@@ -184,7 +184,7 @@ namespace DataGraph.OneDrive.Fetch
 
             try
             {
-                var values = ParseValuesArray(response.Value);
+                var values = JsonLite.ParseValuesArray(response.Value);
 
                 if (values == null || values.Count == 0)
                     return Result<RawTableData>.Failure(
@@ -261,7 +261,7 @@ namespace DataGraph.OneDrive.Fetch
                 return Result<string>.Failure(
                     $"Failed to resolve share link: {response.Error}");
 
-            var id = ExtractJsonStringField(response.Value, "id");
+            var id = JsonLite.ExtractJsonStringField(response.Value, "id");
             return string.IsNullOrEmpty(id)
                 ? Result<string>.Failure("Share link resolved but no item ID.")
                 : Result<string>.Success($"me/drive/items/{id}");
@@ -293,7 +293,7 @@ namespace DataGraph.OneDrive.Fetch
                 return Result<string>.Failure(
                     $"Failed to resolve path '{path}': {response.Error}");
 
-            var id = ExtractJsonStringField(response.Value, "id");
+            var id = JsonLite.ExtractJsonStringField(response.Value, "id");
             return string.IsNullOrEmpty(id)
                 ? Result<string>.Failure("Path resolved but no item ID.")
                 : Result<string>.Success($"me/drive/items/{id}");
@@ -391,172 +391,6 @@ namespace DataGraph.OneDrive.Fetch
             return Result<bool>.Success(true);
         }
 
-        // ==================== JSON PARSING ====================
-        // Unity's JsonUtility cannot deserialize string[][] (jagged arrays).
-        // Manual parsing approach identical to GoogleSheetsFetcher.
-
-        /// <summary>
-        /// Parses the "values" field from Microsoft Graph usedRange response.
-        /// Response format: { "values": [["h1","h2"],["v1","v2"]] }
-        /// </summary>
-        private static List<string[]> ParseValuesArray(string json)
-        {
-            var result = new List<string[]>();
-
-            int valuesIndex = json.IndexOf("\"values\"", StringComparison.Ordinal);
-            if (valuesIndex < 0)
-            {
-                valuesIndex = json.IndexOf("\"Values\"", StringComparison.Ordinal);
-                if (valuesIndex < 0)
-                    return result;
-            }
-
-            int outerArrayStart = json.IndexOf('[', valuesIndex);
-            if (outerArrayStart < 0)
-                return result;
-
-            int pos = outerArrayStart + 1;
-            int depth = 1;
-
-            while (pos < json.Length && depth > 0)
-            {
-                char c = json[pos];
-
-                if (c == '[')
-                {
-                    if (depth == 1)
-                    {
-                        var row = ParseStringArray(json, pos, out int endPos);
-                        result.Add(row);
-                        pos = endPos;
-                        continue;
-                    }
-                    depth++;
-                }
-                else if (c == ']')
-                {
-                    depth--;
-                }
-
-                pos++;
-            }
-
-            return result;
-        }
-
-        private static string[] ParseStringArray(string json, int startPos, out int endPos)
-        {
-            var items = new List<string>();
-            int pos = startPos + 1;
-
-            while (pos < json.Length)
-            {
-                char c = json[pos];
-
-                if (c == ']')
-                {
-                    endPos = pos + 1;
-                    return items.ToArray();
-                }
-
-                if (c == '"')
-                {
-                    var value = ParseJsonString(json, pos, out int strEnd);
-                    items.Add(value);
-                    pos = strEnd;
-                    continue;
-                }
-
-                if (c != ',' && c != ' ' && c != '\n' && c != '\r' && c != '\t')
-                {
-                    var value = ParseUnquotedValue(json, pos, out int valEnd);
-                    items.Add(value);
-                    pos = valEnd;
-                    continue;
-                }
-
-                pos++;
-            }
-
-            endPos = pos;
-            return items.ToArray();
-        }
-
-        private static string ParseJsonString(string json, int startPos, out int endPos)
-        {
-            var sb = new StringBuilder();
-            int pos = startPos + 1;
-
-            while (pos < json.Length)
-            {
-                char c = json[pos];
-
-                if (c == '\\' && pos + 1 < json.Length)
-                {
-                    char next = json[pos + 1];
-                    switch (next)
-                    {
-                        case '"': sb.Append('"'); break;
-                        case '\\': sb.Append('\\'); break;
-                        case 'n': sb.Append('\n'); break;
-                        case 'r': sb.Append('\r'); break;
-                        case 't': sb.Append('\t'); break;
-                        case '/': sb.Append('/'); break;
-                        default: sb.Append(next); break;
-                    }
-                    pos += 2;
-                    continue;
-                }
-
-                if (c == '"')
-                {
-                    endPos = pos + 1;
-                    return sb.ToString();
-                }
-
-                sb.Append(c);
-                pos++;
-            }
-
-            endPos = pos;
-            return sb.ToString();
-        }
-
-        private static string ParseUnquotedValue(string json, int startPos, out int endPos)
-        {
-            int pos = startPos;
-            while (pos < json.Length)
-            {
-                char c = json[pos];
-                if (c == ',' || c == ']' || c == '}')
-                    break;
-                pos++;
-            }
-            endPos = pos;
-            var value = json.Substring(startPos, pos - startPos).Trim();
-            return value == "null" ? "" : value;
-        }
-
-        /// <summary>
-        /// Extracts a simple string field value from JSON without full parsing.
-        /// Used for single-field responses like driveItem { "id": "..." }.
-        /// </summary>
-        private static string ExtractJsonStringField(string json, string fieldName)
-        {
-            var key = $"\"{fieldName}\"";
-            int idx = json.IndexOf(key, StringComparison.Ordinal);
-            if (idx < 0) return null;
-
-            int colonIdx = json.IndexOf(':', idx + key.Length);
-            if (colonIdx < 0) return null;
-
-            int quoteStart = json.IndexOf('"', colonIdx + 1);
-            if (quoteStart < 0) return null;
-
-            var value = ParseJsonString(json, quoteStart, out _);
-            return value;
-        }
-
         /// <summary>
         /// Parses worksheet names from the Graph API worksheets response.
         /// </summary>
@@ -575,7 +409,7 @@ namespace DataGraph.OneDrive.Fetch
                 int quoteStart = json.IndexOf('"', colonIdx + 1);
                 if (quoteStart < 0) break;
 
-                var name = ParseJsonString(json, quoteStart, out int endPos);
+                var name = JsonLite.ParseJsonString(json, quoteStart, out int endPos);
                 names.Add(name);
                 pos = endPos;
             }
