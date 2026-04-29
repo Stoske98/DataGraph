@@ -738,7 +738,14 @@ namespace DataGraph.Editor.Commands
         {
             var keysField = entryType.GetField(dict.FieldName + "Keys");
             var valuesField = entryType.GetField(dict.FieldName + "Values");
-            if (keysField == null || valuesField == null) return;
+            if (keysField == null || valuesField == null)
+            {
+                Debug.LogWarning(
+                    $"DataGraph (Quantum): expected fields '{dict.FieldName}Keys' and '{dict.FieldName}Values' " +
+                    $"on type '{entryType.FullName}' for dictionary serialization. Skipping. " +
+                    "Re-run code generation if the schema changed.");
+                return;
+            }
 
             var keysList = (System.Collections.IList)keysField.GetValue(instance);
             var valuesList = (System.Collections.IList)valuesField.GetValue(instance);
@@ -841,7 +848,13 @@ namespace DataGraph.Editor.Commands
 
                     var field = sourceType.GetField(child.FieldName,
                         System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-                    if (field == null) continue;
+                    if (field == null)
+                    {
+                        Debug.LogWarning(
+                            $"DataGraph (Blob): field '{child.FieldName}' not found on source type " +
+                            $"'{sourceType.FullName}'. Skipping. Re-run code generation if the schema changed.");
+                        continue;
+                    }
 
                     object value = child switch
                     {
@@ -931,7 +944,13 @@ namespace DataGraph.Editor.Commands
             if (targetType.IsEnum) return ParseEnumValue(targetType, value.ToString());
 
             try { return Convert.ChangeType(value, targetType, System.Globalization.CultureInfo.InvariantCulture); }
-            catch { return targetType.IsValueType ? Activator.CreateInstance(targetType) : null; }
+            catch (Exception ex)
+            {
+                Debug.LogWarning(
+                    $"DataGraph: failed to convert value '{value}' (type {value.GetType().Name}) " +
+                    $"to '{targetType.Name}': {ex.Message}. Falling back to default.");
+                return targetType.IsValueType ? Activator.CreateInstance(targetType) : null;
+            }
         }
 
         /// <summary>

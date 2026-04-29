@@ -255,7 +255,13 @@ namespace DataGraph.GoogleSheets.Auth
             if (string.IsNullOrEmpty(json))
                 return null;
             try { return JsonUtility.FromJson<OAuthToken>(json); }
-            catch { return null; }
+            catch (Exception ex)
+            {
+                Debug.LogWarning(
+                    $"DataGraph (Google OAuth): failed to deserialize stored token: {ex.Message}. " +
+                    "Token will be ignored — please sign in again.");
+                return null;
+            }
         }
 
         [Serializable]

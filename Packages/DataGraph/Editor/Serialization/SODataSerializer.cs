@@ -79,7 +79,13 @@ namespace DataGraph.Editor.Serialization
         {
             var setDataMethod = dbAsset.GetType().GetMethod("SetData",
                 BindingFlags.Public | BindingFlags.Instance);
-            if (setDataMethod == null) return;
+            if (setDataMethod == null)
+            {
+                Debug.LogWarning(
+                    $"DataGraph (SO): 'SetData' method not found on '{dbAsset.GetType().FullName}'. " +
+                    "Dictionary database will be empty. Re-run code generation.");
+                return;
+            }
 
             var keyType = dict.KeyTypeName == "int" ? typeof(int) : typeof(string);
             var keysList = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(keyType));
@@ -102,7 +108,13 @@ namespace DataGraph.Editor.Serialization
         {
             var setDataMethod = dbAsset.GetType().GetMethod("SetData",
                 BindingFlags.Public | BindingFlags.Instance);
-            if (setDataMethod == null) return;
+            if (setDataMethod == null)
+            {
+                Debug.LogWarning(
+                    $"DataGraph (SO): 'SetData' method not found on '{dbAsset.GetType().FullName}'. " +
+                    "Array database will be empty. Re-run code generation.");
+                return;
+            }
 
             var entriesList = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(entryType));
 
@@ -120,7 +132,13 @@ namespace DataGraph.Editor.Serialization
         {
             var setDataMethod = dbAsset.GetType().GetMethod("SetData",
                 BindingFlags.Public | BindingFlags.Instance);
-            if (setDataMethod == null) return;
+            if (setDataMethod == null)
+            {
+                Debug.LogWarning(
+                    $"DataGraph (SO): 'SetData' method not found on '{dbAsset.GetType().FullName}'. " +
+                    "Object database will be empty. Re-run code generation.");
+                return;
+            }
 
             var data = CreateAndPopulate(entryType, obj, assetCache);
             setDataMethod.Invoke(dbAsset, new object[] { data });
