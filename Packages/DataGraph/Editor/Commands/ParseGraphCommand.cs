@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using DataGraph.Editor.Adapter;
 using DataGraph.Editor.CodeGen;
 using DataGraph.Editor.Domain;
+using DataGraph.Editor.IO;
 using DataGraph.Editor.Public;
 using DataGraph.Editor.Parsing;
 using DataGraph.Editor.Serialization;
@@ -158,7 +159,7 @@ namespace DataGraph.Editor.Commands
                     }
 
                     var csPath = Path.Combine(soPath, $"{graphName}.cs");
-                    EnsureDirectory(csPath);
+                    PathUtilities.EnsureDirectory(csPath);
                     File.WriteAllText(csPath, entriesResult.Value);
                     generatedFiles.Add(csPath);
 
@@ -208,7 +209,7 @@ namespace DataGraph.Editor.Commands
 
                     var quantumPath = $"Assets/QuantumUser/Simulation/DataGraph/{graphName}";
                     var quantumCsPath = Path.Combine(quantumPath, $"{graphName}QuantumDatabase.cs");
-                    EnsureDirectory(quantumCsPath);
+                    PathUtilities.EnsureDirectory(quantumCsPath);
                     File.WriteAllText(quantumCsPath, quantumResult.Value);
                     generatedFiles.Add(quantumCsPath);
                     log.LogInfo($"Generate: QuantumUser/Simulation/DataGraph/{graphName}/{graphName}QuantumDatabase.cs");
@@ -229,7 +230,7 @@ namespace DataGraph.Editor.Commands
                     }
 
                     var jsonFilePath = Path.Combine(jsonPath, $"{graphName}.json");
-                    EnsureDirectory(jsonFilePath);
+                    PathUtilities.EnsureDirectory(jsonFilePath);
                     File.WriteAllText(jsonFilePath, jsonResult.Value);
                     generatedFiles.Add(jsonFilePath);
 
@@ -418,7 +419,7 @@ namespace DataGraph.Editor.Commands
                 var graphOutputPath = Path.Combine(outputBasePath, graphName, "Blob");
 
                 var builderTypeName = $"DataGraph.Data.{graphName}BlobDatabaseBuilder";
-                var builderType = FindType(builderTypeName);
+                var builderType = TypeFinder.Find(builderTypeName);
                 if (builderType == null)
                 {
                     log.LogError($"Type '{builderTypeName}' not found. Run Parse with Blob enabled first.");
@@ -435,11 +436,11 @@ namespace DataGraph.Editor.Commands
                     return false;
                 }
 
-                var sourceTypeName = $"DataGraph.Data.{graphName}BlobDatabaseBuilder+{GetRootTypeName(graph.Root)}BlobSource";
-                var sourceType = FindType(sourceTypeName);
+                var sourceTypeName = $"DataGraph.Data.{graphName}BlobDatabaseBuilder+{RootTypeResolver.GetTypeName(graph.Root)}BlobSource";
+                var sourceType = TypeFinder.Find(sourceTypeName);
                 if (sourceType == null)
                 {
-                    sourceType = builderType.GetNestedType($"{GetRootTypeName(graph.Root)}BlobSource");
+                    sourceType = builderType.GetNestedType($"{RootTypeResolver.GetTypeName(graph.Root)}BlobSource");
                 }
                 if (sourceType == null)
                 {
@@ -494,7 +495,7 @@ namespace DataGraph.Editor.Commands
                 var blobRef = buildMethod.Invoke(null, buildArgs);
 
                 var blobFilePath = Path.Combine(graphOutputPath, $"{graphName}.blob");
-                EnsureDirectory(blobFilePath);
+                PathUtilities.EnsureDirectory(blobFilePath);
 
                 var saveMethod = builderType.GetMethod("Save",
                     System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
@@ -584,7 +585,7 @@ namespace DataGraph.Editor.Commands
 
                 log.LogInfo("Serialize: creating Quantum asset...");
                 var dbTypeName = $"DataGraph.Data.{graphName}QuantumDatabase";
-                var dbType = FindType(dbTypeName);
+                var dbType = TypeFinder.Find(dbTypeName);
                 if (dbType == null)
                 {
                     log.LogError($"Type '{dbTypeName}' not found. Run Parse with Quantum enabled first.");
@@ -592,8 +593,8 @@ namespace DataGraph.Editor.Commands
                     return false;
                 }
 
-                var entryTypeName = $"DataGraph.Data.{GetRootTypeName(graph.Root)}QuantumEntry";
-                var entryType = FindType(entryTypeName);
+                var entryTypeName = $"DataGraph.Data.{RootTypeResolver.GetTypeName(graph.Root)}QuantumEntry";
+                var entryType = TypeFinder.Find(entryTypeName);
                 if (entryType == null)
                 {
                     log.LogError($"Type '{entryTypeName}' not found.");
@@ -642,7 +643,7 @@ namespace DataGraph.Editor.Commands
 
                 var quantumOutputPath = $"Assets/QuantumUser/Simulation/DataGraph/{graphName}";
                 var assetPath = Path.Combine(quantumOutputPath, $"{graphName}QuantumDatabase.asset");
-                EnsureDirectory(assetPath);
+                PathUtilities.EnsureDirectory(assetPath);
 
                 var existing = AssetDatabase.LoadAssetAtPath<UnityEngine.ScriptableObject>(assetPath);
                 if (existing != null)
@@ -787,7 +788,7 @@ namespace DataGraph.Editor.Commands
             {
                 if (value is UnityEngine.Vector2 v2)
                 {
-                    var fpType = FindType("Photon.Deterministic.FP");
+                    var fpType = TypeFinder.Find("Photon.Deterministic.FP");
                     var fromFloat = fpType?.GetMethod("FromFloat_UNSAFE",
                         System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static,
                         null, new[] { typeof(float) }, null);
@@ -805,7 +806,7 @@ namespace DataGraph.Editor.Commands
             {
                 if (value is UnityEngine.Vector3 v3)
                 {
-                    var fpType = FindType("Photon.Deterministic.FP");
+                    var fpType = TypeFinder.Find("Photon.Deterministic.FP");
                     var fromFloat = fpType?.GetMethod("FromFloat_UNSAFE",
                         System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static,
                         null, new[] { typeof(float) }, null);
@@ -941,7 +942,7 @@ namespace DataGraph.Editor.Commands
             if (targetType == typeof(float)) return Convert.ToSingle(value);
             if (targetType == typeof(double)) return Convert.ToDouble(value);
             if (targetType == typeof(bool)) return Convert.ToBoolean(value);
-            if (targetType.IsEnum) return ParseEnumValue(targetType, value.ToString());
+            if (targetType.IsEnum) return EnumParser.Parse(targetType, value.ToString());
 
             try { return Convert.ChangeType(value, targetType, System.Globalization.CultureInfo.InvariantCulture); }
             catch (Exception ex)
@@ -951,51 +952,6 @@ namespace DataGraph.Editor.Commands
                     $"to '{targetType.Name}': {ex.Message}. Falling back to default.");
                 return targetType.IsValueType ? Activator.CreateInstance(targetType) : null;
             }
-        }
-
-        /// <summary>
-        /// Parses an enum value from a string. Handles [Flags] enums by splitting
-        /// on any separator (| ; ,), trimming each part, and combining with comma
-        /// for Enum.Parse.
-        /// </summary>
-        private static object ParseEnumValue(Type enumType, string raw)
-        {
-            if (string.IsNullOrEmpty(raw))
-                return Activator.CreateInstance(enumType);
-
-            var parts = raw.Split(new[] { '|', ';', ',' }, StringSplitOptions.RemoveEmptyEntries);
-            for (int i = 0; i < parts.Length; i++)
-                parts[i] = parts[i].Trim();
-
-            return Enum.Parse(enumType, string.Join(", ", parts), true);
-        }
-
-        private static string GetRootTypeName(Domain.ParseableNode root)
-        {
-            return root switch
-            {
-                Domain.ParseableDictionaryRoot dict => dict.TypeName,
-                Domain.ParseableArrayRoot arr => arr.TypeName,
-                Domain.ParseableObjectRoot obj => obj.TypeName,
-                _ => "Unknown"
-            };
-        }
-
-        private static Type FindType(string typeName)
-        {
-            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                var type = assembly.GetType(typeName);
-                if (type != null) return type;
-            }
-            return null;
-        }
-
-        private static void EnsureDirectory(string filePath)
-        {
-            var dir = Path.GetDirectoryName(filePath);
-            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
-                Directory.CreateDirectory(dir);
         }
 
         private static void UpdateRegistry(Action<DataGraph.Runtime.DataGraphRegistry> action)
@@ -1012,7 +968,7 @@ namespace DataGraph.Editor.Commands
             {
                 registry = UnityEngine.ScriptableObject.CreateInstance<DataGraph.Runtime.DataGraphRegistry>();
                 var registryPath = "Assets/DataGraph/DataGraphRegistry.asset";
-                EnsureDirectory(registryPath);
+                PathUtilities.EnsureDirectory(registryPath);
                 AssetDatabase.CreateAsset(registry, registryPath);
             }
 
@@ -1095,7 +1051,7 @@ namespace DataGraph.Editor.Commands
                 else
                     csPath = Path.Combine(outputBasePath, subfolder, $"{enumDef.TypeName}.cs");
 
-                EnsureDirectory(csPath);
+                PathUtilities.EnsureDirectory(csPath);
                 File.WriteAllText(csPath, genResult.Value);
                 log.LogSuccess($"Generated: {csPath} ({enumDef.Members.Count} members)");
 
@@ -1128,7 +1084,7 @@ namespace DataGraph.Editor.Commands
                     return Result<List<string>>.Failure(entriesResult.Error);
 
                 var blobCsPath = Path.Combine(outputPath, $"{graphName}Blob.cs");
-                EnsureDirectory(blobCsPath);
+                PathUtilities.EnsureDirectory(blobCsPath);
                 File.WriteAllText(blobCsPath, entriesResult.Value);
                 files.Add(blobCsPath);
 

@@ -207,11 +207,11 @@ namespace DataGraph.Editor.CodeGen
                     WriteClass(w, obj.TypeName, false, obj.Children);
                     break;
                 case ParseableArrayField arr
-                    when arr.Mode == ArrayMode.Vertical && HasStructuralChildren(arr):
+                    when arr.Mode == ArrayMode.Vertical && CodeGenHelpers.HasStructuralChildren(arr):
                     w.BlankLine();
                     WriteClass(w, arr.TypeName, false, arr.Children);
                     break;
-                case ParseableDictionaryField dict when HasStructuralChildren(dict):
+                case ParseableDictionaryField dict when CodeGenHelpers.HasStructuralChildren(dict):
                     w.BlankLine();
                     WriteClass(w, dict.TypeName, false, dict.Children);
                     break;
@@ -267,20 +267,6 @@ namespace DataGraph.Editor.CodeGen
                 return TypeMapper.GetCSharpTypeName(singleLeaf.ValueType, singleLeaf.EnumType);
 
             return dict.TypeName;
-        }
-
-        private static bool HasStructuralChildren(ParseableNode node)
-        {
-            var typeName = node switch
-            {
-                ParseableArrayField arr => arr.TypeName,
-                ParseableDictionaryField dict => dict.TypeName,
-                _ => null
-            };
-            if (!string.IsNullOrEmpty(typeName)) return node.Children.Count > 0;
-            if (node.Children.Count == 1 && node.Children[0] is ParseableCustomField)
-                return false;
-            return node.Children.Count > 0;
         }
 
         private void WriteDatabaseClass(CodeWriter w, string graphName, ParseableNode root)

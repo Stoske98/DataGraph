@@ -227,8 +227,8 @@ namespace DataGraph.GoogleSheets.Auth
                 $"\"exp\":{now + TokenLifetimeSeconds}" +
                 "}";
 
-            var headerB64 = Base64UrlEncode(Encoding.UTF8.GetBytes(header));
-            var claimsB64 = Base64UrlEncode(Encoding.UTF8.GetBytes(claims));
+            var headerB64 = Base64Url.Encode(Encoding.UTF8.GetBytes(header));
+            var claimsB64 = Base64Url.Encode(Encoding.UTF8.GetBytes(claims));
             var unsignedToken = $"{headerB64}.{claimsB64}";
 
             var rsaResult = ImportRsaKey(key.PrivateKeyPem);
@@ -243,7 +243,7 @@ namespace DataGraph.GoogleSheets.Auth
                     HashAlgorithmName.SHA256,
                     RSASignaturePadding.Pkcs1);
 
-                var signatureB64 = Base64UrlEncode(signature);
+                var signatureB64 = Base64Url.Encode(signature);
                 return Result<string>.Success(
                     $"{unsignedToken}.{signatureB64}");
             }
@@ -471,14 +471,6 @@ namespace DataGraph.GoogleSheets.Auth
             var padded = new byte[targetLength];
             Array.Copy(data, 0, padded, targetLength - data.Length, data.Length);
             return padded;
-        }
-
-        private static string Base64UrlEncode(byte[] data)
-        {
-            return Convert.ToBase64String(data)
-                .TrimEnd('=')
-                .Replace('+', '-')
-                .Replace('/', '_');
         }
 
         private static string EscapeJsonString(string value)

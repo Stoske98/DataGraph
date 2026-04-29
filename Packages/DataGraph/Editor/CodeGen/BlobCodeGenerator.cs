@@ -114,15 +114,7 @@ namespace DataGraph.Editor.CodeGen
 
         private void WriteRootStruct(CodeWriter w, ParseableNode root)
         {
-            var typeName = root switch
-            {
-                ParseableDictionaryRoot dict => dict.TypeName,
-                ParseableArrayRoot arr => arr.TypeName,
-                ParseableObjectRoot obj => obj.TypeName,
-                _ => throw new InvalidOperationException($"Unknown root: {root.GetType().Name}")
-            };
-
-            WriteStruct(w, typeName, root.Children);
+            WriteStruct(w, RootTypeResolver.GetTypeName(root), root.Children);
         }
 
         private void WriteStruct(CodeWriter w, string typeName, IReadOnlyList<ParseableNode> children)
@@ -185,12 +177,12 @@ namespace DataGraph.Editor.CodeGen
                     WriteStruct(w, obj.TypeName, obj.Children);
                     break;
 
-                case ParseableArrayField arr when arr.Mode == ArrayMode.Vertical && HasStructuralChildren(arr):
+                case ParseableArrayField arr when arr.Mode == ArrayMode.Vertical && CodeGenHelpers.HasStructuralChildren(arr):
                     w.BlankLine();
                     WriteStruct(w, arr.TypeName, arr.Children);
                     break;
 
-                case ParseableDictionaryField dict when HasStructuralChildren(dict):
+                case ParseableDictionaryField dict when CodeGenHelpers.HasStructuralChildren(dict):
                     w.BlankLine();
                     WriteStruct(w, dict.TypeName, dict.Children);
                     break;
@@ -474,11 +466,11 @@ namespace DataGraph.Editor.CodeGen
                         w.BlankLine();
                         WriteSourceStruct(w, obj.TypeName, obj.Children);
                         break;
-                    case ParseableArrayField arr when arr.Mode == ArrayMode.Vertical && HasStructuralChildren(arr):
+                    case ParseableArrayField arr when arr.Mode == ArrayMode.Vertical && CodeGenHelpers.HasStructuralChildren(arr):
                         w.BlankLine();
                         WriteSourceStruct(w, arr.TypeName, arr.Children);
                         break;
-                    case ParseableDictionaryField dict when HasStructuralChildren(dict):
+                    case ParseableDictionaryField dict when CodeGenHelpers.HasStructuralChildren(dict):
                         w.BlankLine();
                         WriteSourceStruct(w, dict.TypeName, dict.Children);
                         break;
@@ -651,18 +643,5 @@ namespace DataGraph.Editor.CodeGen
             return dict.TypeName + "BlobSource";
         }
 
-        private static bool HasStructuralChildren(ParseableNode node)
-        {
-            var typeName = node switch
-            {
-                ParseableArrayField arr => arr.TypeName,
-                ParseableDictionaryField dict => dict.TypeName,
-                _ => null
-            };
-            if (!string.IsNullOrEmpty(typeName)) return node.Children.Count > 0;
-            if (node.Children.Count == 1 && node.Children[0] is ParseableCustomField)
-                return false;
-            return node.Children.Count > 0;
-        }
     }
 }

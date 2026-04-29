@@ -55,7 +55,7 @@ namespace DataGraph.Editor.CodeGen
 
         private void WriteEntryClasses(CodeWriter w, ParseableNode root)
         {
-            var typeName = GetTypeName(root);
+            var typeName = RootTypeResolver.GetTypeName(root);
             var keyInfo = root is ParseableDictionaryRoot dict ? dict : null;
             WriteEntryClass(w, typeName, root.Children, keyInfo);
         }
@@ -156,11 +156,11 @@ namespace DataGraph.Editor.CodeGen
                     w.BlankLine();
                     WriteEntryClass(w, obj.TypeName, obj.Children);
                     break;
-                case ParseableArrayField arr when arr.Mode == ArrayMode.Vertical && HasStructuralChildren(arr):
+                case ParseableArrayField arr when arr.Mode == ArrayMode.Vertical && CodeGenHelpers.HasStructuralChildren(arr):
                     w.BlankLine();
                     WriteEntryClass(w, arr.TypeName, arr.Children);
                     break;
-                case ParseableDictionaryField dict when HasStructuralChildren(dict):
+                case ParseableDictionaryField dict when CodeGenHelpers.HasStructuralChildren(dict):
                     w.BlankLine();
                     WriteEntryClass(w, dict.TypeName, dict.Children);
                     break;
@@ -172,7 +172,7 @@ namespace DataGraph.Editor.CodeGen
         private void WriteDatabaseClass(CodeWriter w, string graphName, ParseableNode root)
         {
             var dbName = $"{graphName}QuantumDatabase";
-            var entryName = GetTypeName(root) + "QuantumEntry";
+            var entryName = RootTypeResolver.GetTypeName(root) + "QuantumEntry";
 
             w.BeginBlock($"public class {dbName} : AssetObject");
             w.Line($"public List<{entryName}> entries = new();");
@@ -370,29 +370,5 @@ namespace DataGraph.Editor.CodeGen
             return dict.TypeName + "QuantumEntry";
         }
 
-        private static bool HasStructuralChildren(ParseableNode node)
-        {
-            var typeName = node switch
-            {
-                ParseableArrayField arr => arr.TypeName,
-                ParseableDictionaryField dict => dict.TypeName,
-                _ => null
-            };
-            if (!string.IsNullOrEmpty(typeName)) return node.Children.Count > 0;
-            if (node.Children.Count == 1 && node.Children[0] is ParseableCustomField)
-                return false;
-            return node.Children.Count > 0;
-        }
-
-        private static string GetTypeName(ParseableNode root)
-        {
-            return root switch
-            {
-                ParseableDictionaryRoot dict => dict.TypeName,
-                ParseableArrayRoot arr => arr.TypeName,
-                ParseableObjectRoot obj => obj.TypeName,
-                _ => "Unknown"
-            };
-        }
     }
 }

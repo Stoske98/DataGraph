@@ -219,13 +219,10 @@ namespace DataGraph.OneDrive.Auth
             var bytes = new byte[32];
             using var rng = RandomNumberGenerator.Create();
             rng.GetBytes(bytes);
-            var verifier = Base64UrlEncode(bytes);
+            var verifier = Base64Url.Encode(bytes);
             using var sha = SHA256.Create();
-            return (verifier, Base64UrlEncode(sha.ComputeHash(Encoding.ASCII.GetBytes(verifier))));
+            return (verifier, Base64Url.Encode(sha.ComputeHash(Encoding.ASCII.GetBytes(verifier))));
         }
-
-        private static string Base64UrlEncode(byte[] data) =>
-            Convert.ToBase64String(data).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
         private static int FindAvailablePort()
         {

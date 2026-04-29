@@ -5,6 +5,8 @@ using System.Globalization;
 using System.IO;
 using System.Reflection;
 using DataGraph.Editor.Domain;
+using DataGraph.Editor.IO;
+using DataGraph.Editor.Parsing;
 using DataGraph.Runtime;
 using UnityEditor;
 using UnityEngine;
@@ -30,13 +32,13 @@ namespace DataGraph.Editor.Serialization
             try
             {
                 var dbTypeName = $"{graph.GraphName}Database";
-                var dbType = FindType(dbTypeName);
+                var dbType = TypeFinder.FindGenerated(dbTypeName);
                 if (dbType == null)
                     return Result<string>.Failure(
                         $"Type '{dbTypeName}' not found. Run code generation first and wait for compilation.");
 
-                var entryTypeName = GetRootTypeName(graph.Root);
-                var entryType = FindType(entryTypeName);
+                var entryTypeName = RootTypeResolver.GetTypeName(graph.Root);
+                var entryType = TypeFinder.FindGenerated(entryTypeName);
                 if (entryType == null)
                     return Result<string>.Failure($"Type '{entryTypeName}' not found.");
 
@@ -57,7 +59,7 @@ namespace DataGraph.Editor.Serialization
                 }
 
                 var assetPath = Path.Combine(outputPath, $"{graph.GraphName}Database.asset");
-                EnsureDirectory(assetPath);
+                PathUtilities.EnsureDirectory(assetPath);
 
                 var existing = AssetDatabase.LoadAssetAtPath<ScriptableObject>(assetPath);
                 if (existing != null)
@@ -236,7 +238,7 @@ namespace DataGraph.Editor.Serialization
                 if (targetType == typeof(double)) return Convert.ToDouble(value);
                 if (targetType == typeof(bool)) return Convert.ToBoolean(value);
                 if (targetType == typeof(string)) return value.ToString();
-                if (targetType.IsEnum) return ParseEnumValue(targetType, value.ToString());
+                if (targetType.IsEnum) return EnumParser.Parse(targetType, value.ToString());
                 return Convert.ChangeType(value, targetType, CultureInfo.InvariantCulture);
             }
             catch
@@ -245,22 +247,6 @@ namespace DataGraph.Editor.Serialization
             }
         }
 
-        /// <summary>
-        /// Parses an enum value from a string. Handles [Flags] enums by splitting
-        /// on any separator (| ; ,), trimming each part, and combining with comma
-        /// for Enum.Parse.
-        /// </summary>
-        private static object ParseEnumValue(Type enumType, string raw)
-        {
-            if (string.IsNullOrEmpty(raw))
-                return Activator.CreateInstance(enumType);
-
-            var parts = raw.Split(new[] { '|', ';', ',' }, StringSplitOptions.RemoveEmptyEntries);
-            for (int i = 0; i < parts.Length; i++)
-                parts[i] = parts[i].Trim();
-
-            return Enum.Parse(enumType, string.Join(", ", parts), true);
-        }
         private static object ResolveAssetReference(ParsedAssetReference assetRef,
             Dictionary<string, UnityEngine.Object> assetCache)
         {
@@ -317,43 +303,5 @@ namespace DataGraph.Editor.Serialization
             }
         }
 
-        private static string GetRootTypeName(ParseableNode root)
-        {
-            return root switch
-            {
-                ParseableDictionaryRoot dict => dict.TypeName,
-                ParseableArrayRoot arr => arr.TypeName,
-                ParseableObjectRoot obj => obj.TypeName,
-                _ => throw new InvalidOperationException($"Unknown root: {root.GetType().Name}")
-            };
-        }
-
-        private static Type FindType(string typeName)
-        {
-            var fullName = $"DataGraph.Data.{typeName}";
-
-            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                var type = assembly.GetType(fullName);
-                if (type != null)
-                    return type;
-            }
-
-            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                var type = assembly.GetType(typeName);
-                if (type != null)
-                    return type;
-            }
-
-            return null;
-        }
-
-        private static void EnsureDirectory(string filePath)
-        {
-            var dir = Path.GetDirectoryName(filePath);
-            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
-                Directory.CreateDirectory(dir);
-        }
     }
 }
