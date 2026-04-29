@@ -1,5 +1,6 @@
 using System;
 using System.Text;
+using DataGraph.Editor.CodeGen;
 using DataGraph.Editor.Domain;
 using DataGraph.Runtime;
 
@@ -99,7 +100,7 @@ namespace DataGraph.Editor.Serialization
                     }
                     else
                     {
-                        Ln(sb, $"\"{fieldName}\": {{\"type\": \"{GetJsonPrimitiveType(custom.ValueType)}\"}}" + Trail(isLast));
+                        Ln(sb, $"\"{fieldName}\": {{\"type\": \"{TypeMapper.GetJsonSchemaType(custom.ValueType)}\"}}" + Trail(isLast));
                     }
                     break;
 
@@ -139,7 +140,7 @@ namespace DataGraph.Editor.Serialization
                         if (IsStructuredType(singleLeaf.ValueType))
                             WriteStructuredValueSchema(sb, singleLeaf.ValueType);
                         else
-                            Ln(sb, $"\"type\": \"{GetJsonPrimitiveType(singleLeaf.ValueType)}\"");
+                            Ln(sb, $"\"type\": \"{TypeMapper.GetJsonSchemaType(singleLeaf.ValueType)}\"");
                     }
                     else
                     {
@@ -160,7 +161,7 @@ namespace DataGraph.Editor.Serialization
                 if (IsStructuredType(leaf.ValueType))
                     WriteStructuredValueSchema(sb, leaf.ValueType);
                 else
-                    Ln(sb, $"\"type\": \"{GetJsonPrimitiveType(leaf.ValueType)}\"");
+                    Ln(sb, $"\"type\": \"{TypeMapper.GetJsonSchemaType(leaf.ValueType)}\"");
             }
             else
             {
@@ -217,20 +218,6 @@ namespace DataGraph.Editor.Serialization
             valueType == FieldValueType.Vector2 ||
             valueType == FieldValueType.Vector3 ||
             valueType == FieldValueType.Color;
-
-        private static string GetJsonPrimitiveType(FieldValueType valueType)
-        {
-            return valueType switch
-            {
-                FieldValueType.String => "string",
-                FieldValueType.Int => "integer",
-                FieldValueType.Float => "number",
-                FieldValueType.Double => "number",
-                FieldValueType.Bool => "boolean",
-                FieldValueType.Enum => "string",
-                _ => throw new InvalidOperationException($"Unsupported FieldValueType: {valueType}")
-            };
-        }
 
         private static string Trail(bool isLast) => isLast ? "" : ",";
 

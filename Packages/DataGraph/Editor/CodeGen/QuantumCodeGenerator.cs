@@ -107,7 +107,7 @@ namespace DataGraph.Editor.CodeGen
             switch (node)
             {
                 case ParseableCustomField custom:
-                    w.Line($"public {GetQuantumSimType(custom.ValueType)} {custom.FieldName};");
+                    w.Line($"public {TypeMapper.GetQuantumSimType(custom.ValueType)} {custom.FieldName};");
                     break;
                 case ParseableEnumField enumField:
                     w.Line($"public {enumField.EnumTypeName} {enumField.FieldName};");
@@ -136,7 +136,7 @@ namespace DataGraph.Editor.CodeGen
             switch (node)
             {
                 case ParseableCustomField custom:
-                    w.Line($"public {GetQuantumViewType(custom.ValueType)} {custom.FieldName};");
+                    w.Line($"public {TypeMapper.GetQuantumViewType(custom.ValueType)} {custom.FieldName};");
                     break;
                 case ParseableAssetField asset:
                     w.Line($"public UnityEngine.{AssetTypeMapper.GetCSharpTypeName(asset.AssetType)} {asset.FieldName};");
@@ -318,44 +318,19 @@ namespace DataGraph.Editor.CodeGen
             };
         }
 
-        private static string GetQuantumSimType(FieldValueType type)
-        {
-            return type switch
-            {
-                FieldValueType.Int => "int",
-                FieldValueType.Float => "FP",
-                FieldValueType.Double => "FP",
-                FieldValueType.Bool => "bool",
-                FieldValueType.Vector2 => "FPVector2",
-                FieldValueType.Vector3 => "FPVector3",
-                _ => throw new InvalidOperationException(
-                    $"FieldValueType.{type} is not simulation-safe and should not reach GetQuantumSimType.")
-            };
-        }
-
-        private static string GetQuantumViewType(FieldValueType type)
-        {
-            return type switch
-            {
-                FieldValueType.String => "string",
-                FieldValueType.Color => "UnityEngine.Color",
-                _ => "string"
-            };
-        }
-
         private string GetArrayElementQuantumType(ParseableArrayField arr, bool sim)
         {
             if (arr.Mode == ArrayMode.Horizontal)
             {
                 if (arr.Children.Count > 0 && arr.Children[0] is ParseableCustomField leaf)
-                    return sim ? GetQuantumSimType(leaf.ValueType) : GetQuantumViewType(leaf.ValueType);
+                    return sim ? TypeMapper.GetQuantumSimType(leaf.ValueType) : TypeMapper.GetQuantumViewType(leaf.ValueType);
                 return "string";
             }
 
             if (string.IsNullOrEmpty(arr.TypeName)
                 && arr.Children.Count == 1
                 && arr.Children[0] is ParseableCustomField singleLeaf)
-                return sim ? GetQuantumSimType(singleLeaf.ValueType) : GetQuantumViewType(singleLeaf.ValueType);
+                return sim ? TypeMapper.GetQuantumSimType(singleLeaf.ValueType) : TypeMapper.GetQuantumViewType(singleLeaf.ValueType);
 
             return arr.TypeName + "QuantumEntry";
         }
@@ -365,7 +340,7 @@ namespace DataGraph.Editor.CodeGen
             if (string.IsNullOrEmpty(dict.TypeName)
                 && dict.Children.Count == 1
                 && dict.Children[0] is ParseableCustomField singleLeaf)
-                return sim ? GetQuantumSimType(singleLeaf.ValueType) : GetQuantumViewType(singleLeaf.ValueType);
+                return sim ? TypeMapper.GetQuantumSimType(singleLeaf.ValueType) : TypeMapper.GetQuantumViewType(singleLeaf.ValueType);
 
             return dict.TypeName + "QuantumEntry";
         }

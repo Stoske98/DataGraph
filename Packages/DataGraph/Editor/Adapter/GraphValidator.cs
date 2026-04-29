@@ -26,9 +26,21 @@ namespace DataGraph.Editor.Adapter
         public ValidationResult Validate(DataGraphAsset graph)
         {
             var result = new ValidationResult();
+
+            // Build lookup maps once to avoid repeated O(n*m) scans of edges/nodes
+            // inside per-node sub-validators (GetParentTypeName, FindNode were the
+            // hot paths before this refactor).
+            var nodeByGuid = new Dictionary<string, SerializedNode>(graph.Nodes.Count);
+            foreach (var node in graph.Nodes)
+                nodeByGuid[node.Guid] = node;
+
+            var parentByChild = new Dictionary<string, string>(graph.Edges.Count);
+            foreach (var edge in graph.Edges)
+                parentByChild[edge.InputNodeGuid] = edge.OutputNodeGuid;
+
             ValidateRootNode(graph, result);
-            ValidateConnectivity(graph, result);
-            ValidateRequiredFields(graph, result);
+            ValidateConnectivity(graph, parentByChild, result);
+            ValidateRequiredFields(graph, nodeByGuid, parentByChild, result);
             ValidateColumns(graph, result);
             return result;
         }
@@ -46,16 +58,13 @@ namespace DataGraph.Editor.Adapter
                 result.AddError($"Graph has {rootCount} root nodes — must have exactly one.");
         }
 
-        private static void ValidateConnectivity(DataGraphAsset graph, ValidationResult result)
+        private static void ValidateConnectivity(DataGraphAsset graph,
+            Dictionary<string, string> parentByChild, ValidationResult result)
         {
-            var connectedInputs = new HashSet<string>();
-            foreach (var edge in graph.Edges)
-                connectedInputs.Add(edge.InputNodeGuid);
-
             foreach (var node in graph.Nodes)
             {
                 if (NodeTypeRegistry.IsRoot(node.TypeName)) continue;
-                if (!connectedInputs.Contains(node.Guid))
+                if (!parentByChild.ContainsKey(node.Guid))
                 {
                     var name = GetNodeDisplayName(node);
                     result.AddWarning($"Node '{name}' is not connected to a parent.");
@@ -63,7 +72,10 @@ namespace DataGraph.Editor.Adapter
             }
         }
 
-        private static void ValidateRequiredFields(DataGraphAsset graph, ValidationResult result)
+        private static void ValidateRequiredFields(DataGraphAsset graph,
+            Dictionary<string, SerializedNode> nodeByGuid,
+            Dictionary<string, string> parentByChild,
+            ValidationResult result)
         {
             foreach (var node in graph.Nodes)
             {
@@ -81,7 +93,13 @@ namespace DataGraph.Editor.Adapter
                     }
                 }
 
-                var parentType = graph.GetParentTypeName(node.Guid);
+                string parentType = null;
+                if (parentByChild.TryGetValue(node.Guid, out var parentGuid)
+                    && nodeByGuid.TryGetValue(parentGuid, out var parentNode))
+                {
+                    parentType = parentNode.TypeName;
+                }
+
                 if (NodeTypeRegistry.ShouldShowFieldName(parentType))
                 {
                     var fieldName = node.GetProperty("FieldName", "");

@@ -136,7 +136,7 @@ namespace DataGraph.Editor.CodeGen
             switch (node)
             {
                 case ParseableCustomField custom:
-                    w.Line($"public {GetBlobTypeName(custom.ValueType)} {custom.FieldName};");
+                    w.Line($"public {TypeMapper.GetBlobType(custom.ValueType)} {custom.FieldName};");
                     break;
 
                 case ParseableEnumField enumField:
@@ -247,11 +247,11 @@ namespace DataGraph.Editor.CodeGen
                     var entryBlob = obj.TypeName + "Blob";
                     w.BeginBlock($"public struct {dbName}");
                     w.Line($"public {entryBlob} data;");
-                    w.BlankLine();
-                    w.BeginBlock($"public ref {entryBlob} GetObject()");
-                    w.Line("return ref data;");
                     w.EndBlock();
-                    w.EndBlock();
+                    // No GetObject() instance method: C# forbids returning a
+                    // ref to a struct field from an instance member (CS8170).
+                    // Callers access the field directly via dbRef.Value.data
+                    // or through the Register lambda below.
                     break;
                 }
             }
@@ -326,7 +326,7 @@ namespace DataGraph.Editor.CodeGen
                 case ParseableObjectRoot:
                     w.Line($"var handle = new BlobDatabaseHandle<{entryBlob}, {dbName}>(");
                     w.Line($"    blobRef,");
-                    w.Line($"    getObject: (ref {dbName} db) => ref db.GetObject());");
+                    w.Line($"    getObject: (ref {dbName} db) => ref db.data);");
                     break;
             }
 
@@ -423,7 +423,7 @@ namespace DataGraph.Editor.CodeGen
                         if (custom.ValueType == FieldValueType.String)
                             w.Line($"public string {custom.FieldName};");
                         else
-                            w.Line($"public {GetBlobTypeName(custom.ValueType)} {custom.FieldName};");
+                            w.Line($"public {TypeMapper.GetBlobType(custom.ValueType)} {custom.FieldName};");
                         break;
 
                     case ParseableEnumField enumField:
@@ -579,35 +579,17 @@ namespace DataGraph.Editor.CodeGen
             w.EndBlock();
         }
 
-        // ==================== TYPE HELPERS ====================
-
-        private static string GetBlobTypeName(FieldValueType valueType)
-        {
-            return valueType switch
-            {
-                FieldValueType.String => "BlobString",
-                FieldValueType.Int => "int",
-                FieldValueType.Float => "float",
-                FieldValueType.Double => "double",
-                FieldValueType.Bool => "bool",
-                FieldValueType.Vector2 => "UnityEngine.Vector2",
-                FieldValueType.Vector3 => "UnityEngine.Vector3",
-                FieldValueType.Color => "UnityEngine.Color",
-                _ => "BlobString"
-            };
-        }
-
         private string GetArrayElementBlobType(ParseableArrayField arr)
         {
             if (arr.Mode == ArrayMode.Horizontal)
             {
                 if (arr.Children.Count > 0 && arr.Children[0] is ParseableCustomField leaf)
-                    return GetBlobTypeName(leaf.ValueType);
+                    return TypeMapper.GetBlobType(leaf.ValueType);
                 return "BlobString";
             }
 
             if (string.IsNullOrEmpty(arr.TypeName) && arr.Children.Count == 1 && arr.Children[0] is ParseableCustomField singleLeaf)
-                return GetBlobTypeName(singleLeaf.ValueType);
+                return TypeMapper.GetBlobType(singleLeaf.ValueType);
 
             return arr.TypeName + "Blob";
         }
@@ -617,12 +599,12 @@ namespace DataGraph.Editor.CodeGen
             if (arr.Mode == ArrayMode.Horizontal)
             {
                 if (arr.Children.Count > 0 && arr.Children[0] is ParseableCustomField leaf)
-                    return leaf.ValueType == FieldValueType.String ? "string" : GetBlobTypeName(leaf.ValueType);
+                    return leaf.ValueType == FieldValueType.String ? "string" : TypeMapper.GetBlobType(leaf.ValueType);
                 return "string";
             }
 
             if (string.IsNullOrEmpty(arr.TypeName) && arr.Children.Count == 1 && arr.Children[0] is ParseableCustomField singleLeaf)
-                return singleLeaf.ValueType == FieldValueType.String ? "string" : GetBlobTypeName(singleLeaf.ValueType);
+                return singleLeaf.ValueType == FieldValueType.String ? "string" : TypeMapper.GetBlobType(singleLeaf.ValueType);
 
             return arr.TypeName + "BlobSource";
         }
@@ -630,7 +612,7 @@ namespace DataGraph.Editor.CodeGen
         private string GetDictionaryValueBlobType(ParseableDictionaryField dict)
         {
             if (string.IsNullOrEmpty(dict.TypeName) && dict.Children.Count == 1 && dict.Children[0] is ParseableCustomField singleLeaf)
-                return GetBlobTypeName(singleLeaf.ValueType);
+                return TypeMapper.GetBlobType(singleLeaf.ValueType);
 
             return dict.TypeName + "Blob";
         }
@@ -638,7 +620,7 @@ namespace DataGraph.Editor.CodeGen
         private string GetDictionaryValueSourceType(ParseableDictionaryField dict)
         {
             if (string.IsNullOrEmpty(dict.TypeName) && dict.Children.Count == 1 && dict.Children[0] is ParseableCustomField singleLeaf)
-                return singleLeaf.ValueType == FieldValueType.String ? "string" : GetBlobTypeName(singleLeaf.ValueType);
+                return singleLeaf.ValueType == FieldValueType.String ? "string" : TypeMapper.GetBlobType(singleLeaf.ValueType);
 
             return dict.TypeName + "BlobSource";
         }

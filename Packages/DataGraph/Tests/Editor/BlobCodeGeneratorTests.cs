@@ -267,7 +267,7 @@ namespace DataGraph.Tests.Editor
         }
 
         [Test]
-        public void ObjectRoot_GeneratesGetObject()
+        public void ObjectRoot_GeneratesPublicDataField()
         {
             var graph = MakeGraph(new ParseableObjectRoot("GameConfig", new ParseableNode[]
             {
@@ -277,7 +277,13 @@ namespace DataGraph.Tests.Editor
             var result = _gen.GenerateDatabase(graph);
 
             Assert.IsTrue(result.IsSuccess);
-            Assert.IsTrue(result.Value.Contains("GetObject()"));
+            // Object Blob databases expose a public 'data' field rather than
+            // a GetObject() instance method. Returning ref to a struct field
+            // from an instance member is illegal (CS8170), so callers access
+            // the data field directly via dbRef.Value.data.
+            Assert.IsTrue(result.Value.Contains("public GameConfigBlob data;"));
+            Assert.IsFalse(result.Value.Contains("GetObject()"),
+                "Object Blob database must not declare a GetObject() instance method.");
         }
 
         [Test]
