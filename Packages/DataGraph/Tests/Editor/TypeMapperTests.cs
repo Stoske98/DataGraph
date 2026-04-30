@@ -5,39 +5,51 @@ using DataGraph.Editor.Domain;
 
 namespace DataGraph.Tests.Editor
 {
+    /// <summary>
+    /// TestCase parameters are passed as strings and parsed inside each test,
+    /// not typed FieldValueType / KeyType, because those enums are internal
+    /// and cannot appear in a public method signature (CS0051) — and NUnit
+    /// only discovers public test methods. See feedback_internal_testcase.md.
+    /// </summary>
     [TestFixture]
-    internal class TypeMapperTests
+    public class TypeMapperTests
     {
+        private static FieldValueType Vt(string name) =>
+            (FieldValueType)Enum.Parse(typeof(FieldValueType), name);
+
+        private static KeyType Kt(string name) =>
+            (KeyType)Enum.Parse(typeof(KeyType), name);
+
         // ==================== GetSOType ====================
 
-        [TestCase(FieldValueType.String, "string")]
-        [TestCase(FieldValueType.Int, "int")]
-        [TestCase(FieldValueType.Float, "float")]
-        [TestCase(FieldValueType.Double, "double")]
-        [TestCase(FieldValueType.Bool, "bool")]
-        [TestCase(FieldValueType.Vector2, "Vector2")]
-        [TestCase(FieldValueType.Vector3, "Vector3")]
-        [TestCase(FieldValueType.Color, "Color")]
-        internal void GetSOType_PrimitivesAndStructs_ReturnsCSharpName(FieldValueType vt, string expected)
+        [TestCase("String", "string")]
+        [TestCase("Int", "int")]
+        [TestCase("Float", "float")]
+        [TestCase("Double", "double")]
+        [TestCase("Bool", "bool")]
+        [TestCase("Vector2", "Vector2")]
+        [TestCase("Vector3", "Vector3")]
+        [TestCase("Color", "Color")]
+        public void GetSOType_PrimitivesAndStructs_ReturnsCSharpName(string vt, string expected)
         {
-            Assert.AreEqual(expected, TypeMapper.GetSOType(vt));
+            Assert.AreEqual(expected, TypeMapper.GetSOType(Vt(vt)));
         }
 
         [Test]
-        internal void GetSOType_EnumWithType_ReturnsEnumName()
+        public void GetSOType_EnumWithType_ReturnsEnumName()
         {
             Assert.AreEqual("DayOfWeek",
                 TypeMapper.GetSOType(FieldValueType.Enum, typeof(DayOfWeek)));
         }
 
         [Test]
-        internal void GetSOType_EnumWithoutType_FallsBackToInt()
+        public void GetSOType_EnumWithoutType_FallsBackToInt()
         {
             Assert.AreEqual("int", TypeMapper.GetSOType(FieldValueType.Enum));
         }
 
         [Test]
-        internal void GetSOType_AllEnumValuesCovered()
+        public void GetSOType_AllEnumValuesCovered()
         {
             // Exhaustiveness guard: any new FieldValueType must be added explicitly.
             foreach (FieldValueType vt in Enum.GetValues(typeof(FieldValueType)))
@@ -50,22 +62,22 @@ namespace DataGraph.Tests.Editor
 
         // ==================== GetBlobType ====================
 
-        [TestCase(FieldValueType.String, "BlobString")]
-        [TestCase(FieldValueType.Int, "int")]
-        [TestCase(FieldValueType.Float, "float")]
-        [TestCase(FieldValueType.Double, "double")]
-        [TestCase(FieldValueType.Bool, "bool")]
-        [TestCase(FieldValueType.Vector2, "UnityEngine.Vector2")]
-        [TestCase(FieldValueType.Vector3, "UnityEngine.Vector3")]
-        [TestCase(FieldValueType.Color, "UnityEngine.Color")]
-        [TestCase(FieldValueType.Enum, "int")]
-        internal void GetBlobType_AllValues_ReturnsExpected(FieldValueType vt, string expected)
+        [TestCase("String", "BlobString")]
+        [TestCase("Int", "int")]
+        [TestCase("Float", "float")]
+        [TestCase("Double", "double")]
+        [TestCase("Bool", "bool")]
+        [TestCase("Vector2", "UnityEngine.Vector2")]
+        [TestCase("Vector3", "UnityEngine.Vector3")]
+        [TestCase("Color", "UnityEngine.Color")]
+        [TestCase("Enum", "int")]
+        public void GetBlobType_AllValues_ReturnsExpected(string vt, string expected)
         {
-            Assert.AreEqual(expected, TypeMapper.GetBlobType(vt));
+            Assert.AreEqual(expected, TypeMapper.GetBlobType(Vt(vt)));
         }
 
         [Test]
-        internal void GetBlobType_AllEnumValuesCovered()
+        public void GetBlobType_AllEnumValuesCovered()
         {
             foreach (FieldValueType vt in Enum.GetValues(typeof(FieldValueType)))
             {
@@ -76,74 +88,74 @@ namespace DataGraph.Tests.Editor
 
         // ==================== GetQuantumSimType ====================
 
-        [TestCase(FieldValueType.Int, "int")]
-        [TestCase(FieldValueType.Float, "FP")]
-        [TestCase(FieldValueType.Double, "FP")]
-        [TestCase(FieldValueType.Bool, "bool")]
-        [TestCase(FieldValueType.Vector2, "FPVector2")]
-        [TestCase(FieldValueType.Vector3, "FPVector3")]
-        internal void GetQuantumSimType_SimSafe_ReturnsFPType(FieldValueType vt, string expected)
+        [TestCase("Int", "int")]
+        [TestCase("Float", "FP")]
+        [TestCase("Double", "FP")]
+        [TestCase("Bool", "bool")]
+        [TestCase("Vector2", "FPVector2")]
+        [TestCase("Vector3", "FPVector3")]
+        public void GetQuantumSimType_SimSafe_ReturnsFPType(string vt, string expected)
         {
-            Assert.AreEqual(expected, TypeMapper.GetQuantumSimType(vt));
+            Assert.AreEqual(expected, TypeMapper.GetQuantumSimType(Vt(vt)));
         }
 
-        [TestCase(FieldValueType.String)]
-        [TestCase(FieldValueType.Color)]
-        [TestCase(FieldValueType.Enum)]
-        internal void GetQuantumSimType_NonSimSafe_Throws(FieldValueType vt)
+        [TestCase("String")]
+        [TestCase("Color")]
+        [TestCase("Enum")]
+        public void GetQuantumSimType_NonSimSafe_Throws(string vt)
         {
-            Assert.Throws<InvalidOperationException>(() => TypeMapper.GetQuantumSimType(vt));
+            Assert.Throws<InvalidOperationException>(() => TypeMapper.GetQuantumSimType(Vt(vt)));
         }
 
         // ==================== GetQuantumViewType ====================
 
-        [TestCase(FieldValueType.String, "string")]
-        [TestCase(FieldValueType.Color, "UnityEngine.Color")]
-        internal void GetQuantumViewType_ViewOnly_ReturnsType(FieldValueType vt, string expected)
+        [TestCase("String", "string")]
+        [TestCase("Color", "UnityEngine.Color")]
+        public void GetQuantumViewType_ViewOnly_ReturnsType(string vt, string expected)
         {
-            Assert.AreEqual(expected, TypeMapper.GetQuantumViewType(vt));
+            Assert.AreEqual(expected, TypeMapper.GetQuantumViewType(Vt(vt)));
         }
 
-        [TestCase(FieldValueType.Int)]
-        [TestCase(FieldValueType.Float)]
-        [TestCase(FieldValueType.Double)]
-        [TestCase(FieldValueType.Bool)]
-        [TestCase(FieldValueType.Vector2)]
-        [TestCase(FieldValueType.Vector3)]
-        [TestCase(FieldValueType.Enum)]
-        internal void GetQuantumViewType_SimSafeOrUnknown_Throws(FieldValueType vt)
+        [TestCase("Int")]
+        [TestCase("Float")]
+        [TestCase("Double")]
+        [TestCase("Bool")]
+        [TestCase("Vector2")]
+        [TestCase("Vector3")]
+        [TestCase("Enum")]
+        public void GetQuantumViewType_SimSafeOrUnknown_Throws(string vt)
         {
-            Assert.Throws<InvalidOperationException>(() => TypeMapper.GetQuantumViewType(vt));
+            Assert.Throws<InvalidOperationException>(() => TypeMapper.GetQuantumViewType(Vt(vt)));
         }
 
         // ==================== GetJsonSchemaType ====================
 
-        [TestCase(FieldValueType.String, "string")]
-        [TestCase(FieldValueType.Int, "integer")]
-        [TestCase(FieldValueType.Float, "number")]
-        [TestCase(FieldValueType.Double, "number")]
-        [TestCase(FieldValueType.Bool, "boolean")]
-        [TestCase(FieldValueType.Enum, "string")]
-        internal void GetJsonSchemaType_Primitives_ReturnsSchemaName(FieldValueType vt, string expected)
+        [TestCase("String", "string")]
+        [TestCase("Int", "integer")]
+        [TestCase("Float", "number")]
+        [TestCase("Double", "number")]
+        [TestCase("Bool", "boolean")]
+        [TestCase("Enum", "string")]
+        public void GetJsonSchemaType_Primitives_ReturnsSchemaName(string vt, string expected)
         {
-            Assert.AreEqual(expected, TypeMapper.GetJsonSchemaType(vt));
+            Assert.AreEqual(expected, TypeMapper.GetJsonSchemaType(Vt(vt)));
         }
 
-        [TestCase(FieldValueType.Vector2)]
-        [TestCase(FieldValueType.Vector3)]
-        [TestCase(FieldValueType.Color)]
-        internal void GetJsonSchemaType_StructuredTypes_Throw(FieldValueType vt)
+        [TestCase("Vector2")]
+        [TestCase("Vector3")]
+        [TestCase("Color")]
+        public void GetJsonSchemaType_StructuredTypes_Throw(string vt)
         {
-            Assert.Throws<InvalidOperationException>(() => TypeMapper.GetJsonSchemaType(vt));
+            Assert.Throws<InvalidOperationException>(() => TypeMapper.GetJsonSchemaType(Vt(vt)));
         }
 
         // ==================== GetKeyTypeName ====================
 
-        [TestCase(KeyType.Int, "int")]
-        [TestCase(KeyType.String, "string")]
-        internal void GetKeyTypeName_Known_ReturnsCSharpName(KeyType kt, string expected)
+        [TestCase("Int", "int")]
+        [TestCase("String", "string")]
+        public void GetKeyTypeName_Known_ReturnsCSharpName(string kt, string expected)
         {
-            Assert.AreEqual(expected, TypeMapper.GetKeyTypeName(kt));
+            Assert.AreEqual(expected, TypeMapper.GetKeyTypeName(Kt(kt)));
         }
     }
 }
