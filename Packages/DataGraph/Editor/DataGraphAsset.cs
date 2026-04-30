@@ -284,6 +284,12 @@ namespace DataGraph.Editor
         [SerializeField] private bool _isFixed;
         [SerializeField] private List<SerializedNodeProperty> _properties = new();
 
+        // Runtime lookup cache. Not serialized — Unity does not serialize
+        // Dictionary, and the cache is rebuilt lazily after deserialization.
+        // GraphValidator iterates every property of every node on every keystroke
+        // (see T14), so the per-call O(n) scan in GetProperty was the hot path.
+        [NonSerialized] private Dictionary<string, string> _propertyCache;
+
         public string Guid { get => _guid; set => _guid = value; }
         public string TypeName { get => _typeName; set => _typeName = value; }
         public Vector2 Position { get => _position; set => _position = value; }
@@ -292,18 +298,28 @@ namespace DataGraph.Editor
 
         public string GetProperty(string key, string defaultValue = "")
         {
-            foreach (var prop in _properties)
-                if (prop.Key == key) return prop.Value;
-            return defaultValue;
+            EnsureCache();
+            return _propertyCache.TryGetValue(key, out var value) ? value : defaultValue;
         }
 
         public void SetProperty(string key, string value)
         {
+            EnsureCache();
+            _propertyCache[key] = value;
+
             foreach (var prop in _properties)
             {
                 if (prop.Key == key) { prop.Value = value; return; }
             }
             _properties.Add(new SerializedNodeProperty { Key = key, Value = value });
+        }
+
+        private void EnsureCache()
+        {
+            if (_propertyCache != null) return;
+            _propertyCache = new Dictionary<string, string>(_properties.Count);
+            foreach (var prop in _properties)
+                _propertyCache[prop.Key] = prop.Value;
         }
     }
 
