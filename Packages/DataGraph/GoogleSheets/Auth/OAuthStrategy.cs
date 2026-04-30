@@ -215,13 +215,7 @@ namespace DataGraph.GoogleSheets.Auth
             CancellationToken cancellationToken)
         {
             using var request = UnityWebRequest.Post(TokenEndpoint, form);
-            var operation = request.SendWebRequest();
-
-            while (!operation.isDone)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                await Task.Delay(50, cancellationToken);
-            }
+            await request.SendAsync(cancellationToken);
 
             if (request.result != UnityWebRequest.Result.Success)
                 return Result<OAuthToken>.Failure($"Token request failed: {request.error}");

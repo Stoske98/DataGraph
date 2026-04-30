@@ -176,13 +176,7 @@ namespace DataGraph.GoogleSheets.Auth
             try
             {
                 using var request = UnityWebRequest.Post(key.TokenUri, form);
-                var operation = request.SendWebRequest();
-
-                while (!operation.isDone)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    await Task.Yield();
-                }
+                await request.SendAsync(cancellationToken);
 
                 if (request.result != UnityWebRequest.Result.Success)
                     return Result<string>.Failure(

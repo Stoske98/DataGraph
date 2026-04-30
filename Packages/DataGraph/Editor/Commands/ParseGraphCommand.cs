@@ -9,6 +9,7 @@ using DataGraph.Editor.Domain;
 using DataGraph.Editor.IO;
 using DataGraph.Editor.Public;
 using DataGraph.Editor.Parsing;
+using DataGraph.Editor.Reflection;
 using DataGraph.Editor.Serialization;
 using DataGraph.Editor.UI;
 using DataGraph.Runtime;
@@ -451,6 +452,7 @@ namespace DataGraph.Editor.Commands
 
                 var buildParams = buildMethod.GetParameters();
                 object[] buildArgs;
+                var blobReflectionCache = new ReflectionCache();
 
                 if (parseResult.Value.Root is Domain.ParsedDictionary dict)
                 {
@@ -463,7 +465,7 @@ namespace DataGraph.Editor.Commands
                     {
                         var key = keyType == typeof(int) ? (object)Convert.ToInt32(kvp.Key) : kvp.Key.ToString();
                         keys.SetValue(key, idx);
-                        var source = PopulateSource(sourceType, kvp.Value);
+                        var source = PopulateSource(blobReflectionCache, sourceType, kvp.Value);
                         values.SetValue(source, idx);
                         idx++;
                     }
@@ -475,14 +477,14 @@ namespace DataGraph.Editor.Commands
                     var values = Array.CreateInstance(sourceType, arr.Elements.Count);
                     for (int i = 0; i < arr.Elements.Count; i++)
                     {
-                        var source = PopulateSource(sourceType, arr.Elements[i]);
+                        var source = PopulateSource(blobReflectionCache, sourceType, arr.Elements[i]);
                         values.SetValue(source, i);
                     }
                     buildArgs = new object[] { values };
                 }
                 else if (parseResult.Value.Root is Domain.ParsedObject obj)
                 {
-                    var source = PopulateSource(sourceType, obj);
+                    var source = PopulateSource(blobReflectionCache, sourceType, obj);
                     buildArgs = new object[] { source };
                 }
                 else
@@ -619,24 +621,25 @@ namespace DataGraph.Editor.Commands
                     return false;
                 }
 
+                var quantumReflectionCache = new ReflectionCache();
                 switch (parseResult.Value.Root)
                 {
                     case Domain.ParsedDictionary dict:
                         foreach (var kvp in dict.Entries)
                         {
-                            var entry = PopulateQuantumEntry(entryType, kvp.Value, kvp.Key);
+                            var entry = PopulateQuantumEntry(quantumReflectionCache, entryType, kvp.Value, kvp.Key);
                             entriesList.Add(entry);
                         }
                         break;
                     case Domain.ParsedArray arr:
                         foreach (var element in arr.Elements)
                         {
-                            var entry = PopulateQuantumEntry(entryType, element, null);
+                            var entry = PopulateQuantumEntry(quantumReflectionCache, entryType, element, null);
                             entriesList.Add(entry);
                         }
                         break;
                     case Domain.ParsedObject obj:
-                        var singleEntry = PopulateQuantumEntry(entryType, obj, null);
+                        var singleEntry = PopulateQuantumEntry(quantumReflectionCache, entryType, obj, null);
                         entriesList.Add(singleEntry);
                         break;
                 }
@@ -671,13 +674,22 @@ namespace DataGraph.Editor.Commands
             }
         }
 
-        private static object PopulateQuantumEntry(Type entryType, Domain.ParsedNode node, object key)
+        private static readonly System.Reflection.BindingFlags PublicInstance =
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance;
+
+        private static readonly System.Reflection.BindingFlags PublicStatic =
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static;
+
+        private static readonly Type[] FloatParam = { typeof(float) };
+
+        private static object PopulateQuantumEntry(ReflectionCache cache, Type entryType,
+            Domain.ParsedNode node, object key)
         {
             var instance = Activator.CreateInstance(entryType);
 
             if (key != null)
             {
-                var idField = entryType.GetField("id");
+                var idField = cache.GetField(entryType, "id");
                 if (idField != null)
                     idField.SetValue(instance, ConvertForSource(idField.FieldType, key));
             }
@@ -688,20 +700,19 @@ namespace DataGraph.Editor.Commands
                 {
                     if (child is Domain.ParsedDictionary childDict)
                     {
-                        PopulateQuantumDictLists(entryType, childDict, instance);
+                        PopulateQuantumDictLists(cache, entryType, childDict, instance);
                         continue;
                     }
 
-                    var field = entryType.GetField(child.FieldName,
-                        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                    var field = cache.GetField(entryType, child.FieldName, PublicInstance);
                     if (field == null) continue;
 
                     object value = child switch
                     {
-                        Domain.ParsedValue val => ConvertQuantumValue(field.FieldType, val.Value),
+                        Domain.ParsedValue val => ConvertQuantumValue(cache, field.FieldType, val.Value),
                         Domain.ParsedAssetReference assetRef => ConvertQuantumAsset(field.FieldType, assetRef),
-                        Domain.ParsedObject childObj => PopulateQuantumEntry(field.FieldType, childObj, null),
-                        Domain.ParsedArray childArr => PopulateQuantumList(field.FieldType, childArr),
+                        Domain.ParsedObject childObj => PopulateQuantumEntry(cache, field.FieldType, childObj, null),
+                        Domain.ParsedArray childArr => PopulateQuantumList(cache, field.FieldType, childArr),
                         _ => null
                     };
 
@@ -713,7 +724,7 @@ namespace DataGraph.Editor.Commands
             return instance;
         }
 
-        private static object PopulateQuantumList(Type fieldType, Domain.ParsedArray arr)
+        private static object PopulateQuantumList(ReflectionCache cache, Type fieldType, Domain.ParsedArray arr)
         {
             if (!fieldType.IsGenericType) return null;
 
@@ -724,8 +735,8 @@ namespace DataGraph.Editor.Commands
             {
                 object item = element switch
                 {
-                    Domain.ParsedValue val => ConvertQuantumValue(elementType, val.Value),
-                    Domain.ParsedObject obj => PopulateQuantumEntry(elementType, obj, null),
+                    Domain.ParsedValue val => ConvertQuantumValue(cache, elementType, val.Value),
+                    Domain.ParsedObject obj => PopulateQuantumEntry(cache, elementType, obj, null),
                     _ => null
                 };
                 if (item != null) list.Add(item);
@@ -734,11 +745,11 @@ namespace DataGraph.Editor.Commands
             return list;
         }
 
-        private static void PopulateQuantumDictLists(Type entryType,
+        private static void PopulateQuantumDictLists(ReflectionCache cache, Type entryType,
             Domain.ParsedDictionary dict, object instance)
         {
-            var keysField = entryType.GetField(dict.FieldName + "Keys");
-            var valuesField = entryType.GetField(dict.FieldName + "Values");
+            var keysField = cache.GetField(entryType, dict.FieldName + "Keys");
+            var valuesField = cache.GetField(entryType, dict.FieldName + "Values");
             if (keysField == null || valuesField == null)
             {
                 Debug.LogWarning(
@@ -761,15 +772,15 @@ namespace DataGraph.Editor.Commands
 
                 object value = kvp.Value switch
                 {
-                    Domain.ParsedValue val => ConvertQuantumValue(valueElementType, val.Value),
-                    Domain.ParsedObject obj => PopulateQuantumEntry(valueElementType, obj, null),
+                    Domain.ParsedValue val => ConvertQuantumValue(cache, valueElementType, val.Value),
+                    Domain.ParsedObject obj => PopulateQuantumEntry(cache, valueElementType, obj, null),
                     _ => null
                 };
                 if (value != null) valuesList.Add(value);
             }
         }
 
-        private static object ConvertQuantumValue(Type targetType, object value)
+        private static object ConvertQuantumValue(ReflectionCache cache, Type targetType, object value)
         {
             if (value == null) return null;
 
@@ -777,9 +788,7 @@ namespace DataGraph.Editor.Commands
 
             if (typeName == "Photon.Deterministic.FP")
             {
-                var fromFloat = targetType.GetMethod("FromFloat_UNSAFE",
-                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static,
-                    null, new[] { typeof(float) }, null);
+                var fromFloat = cache.GetMethod(targetType, "FromFloat_UNSAFE", PublicStatic, FloatParam);
                 if (fromFloat != null)
                     return fromFloat.Invoke(null, new object[] { Convert.ToSingle(value) });
             }
@@ -788,10 +797,10 @@ namespace DataGraph.Editor.Commands
             {
                 if (value is UnityEngine.Vector2 v2)
                 {
-                    var fpType = TypeFinder.Find("Photon.Deterministic.FP");
-                    var fromFloat = fpType?.GetMethod("FromFloat_UNSAFE",
-                        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static,
-                        null, new[] { typeof(float) }, null);
+                    var fpType = cache.FindType("Photon.Deterministic.FP");
+                    var fromFloat = fpType == null
+                        ? null
+                        : cache.GetMethod(fpType, "FromFloat_UNSAFE", PublicStatic, FloatParam);
                     if (fromFloat != null)
                     {
                         var x = fromFloat.Invoke(null, new object[] { v2.x });
@@ -806,10 +815,10 @@ namespace DataGraph.Editor.Commands
             {
                 if (value is UnityEngine.Vector3 v3)
                 {
-                    var fpType = TypeFinder.Find("Photon.Deterministic.FP");
-                    var fromFloat = fpType?.GetMethod("FromFloat_UNSAFE",
-                        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static,
-                        null, new[] { typeof(float) }, null);
+                    var fpType = cache.FindType("Photon.Deterministic.FP");
+                    var fromFloat = fpType == null
+                        ? null
+                        : cache.GetMethod(fpType, "FromFloat_UNSAFE", PublicStatic, FloatParam);
                     if (fromFloat != null)
                     {
                         var x = fromFloat.Invoke(null, new object[] { v3.x });
@@ -833,7 +842,7 @@ namespace DataGraph.Editor.Commands
             return AssetDatabase.LoadAssetAtPath(assetRef.AssetPath, loadType);
         }
 
-        private static object PopulateSource(Type sourceType, Domain.ParsedNode node)
+        private static object PopulateSource(ReflectionCache cache, Type sourceType, Domain.ParsedNode node)
         {
             var instance = Activator.CreateInstance(sourceType);
 
@@ -843,12 +852,11 @@ namespace DataGraph.Editor.Commands
                 {
                     if (child is Domain.ParsedDictionary childDict)
                     {
-                        PopulateSourceDictLists(sourceType, childDict, instance);
+                        PopulateSourceDictLists(cache, sourceType, childDict, instance);
                         continue;
                     }
 
-                    var field = sourceType.GetField(child.FieldName,
-                        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                    var field = cache.GetField(sourceType, child.FieldName, PublicInstance);
                     if (field == null)
                     {
                         Debug.LogWarning(
@@ -861,8 +869,8 @@ namespace DataGraph.Editor.Commands
                     {
                         Domain.ParsedValue val => ConvertForSource(field.FieldType, val.Value),
                         Domain.ParsedAssetReference assetRef => assetRef.AssetPath ?? "",
-                        Domain.ParsedObject childObj => PopulateSource(field.FieldType, childObj),
-                        Domain.ParsedArray childArr => PopulateSourceArray(field.FieldType, childArr),
+                        Domain.ParsedObject childObj => PopulateSource(cache, field.FieldType, childObj),
+                        Domain.ParsedArray childArr => PopulateSourceArray(cache, field.FieldType, childArr),
                         _ => null
                     };
 
@@ -874,13 +882,11 @@ namespace DataGraph.Editor.Commands
             return instance;
         }
 
-        private static void PopulateSourceDictLists(Type sourceType,
+        private static void PopulateSourceDictLists(ReflectionCache cache, Type sourceType,
             Domain.ParsedDictionary dict, object instance)
         {
-            var keysField = sourceType.GetField(dict.FieldName + "Keys",
-                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-            var valuesField = sourceType.GetField(dict.FieldName + "Values",
-                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            var keysField = cache.GetField(sourceType, dict.FieldName + "Keys", PublicInstance);
+            var valuesField = cache.GetField(sourceType, dict.FieldName + "Values", PublicInstance);
             if (keysField == null || valuesField == null) return;
 
             var keyElementType = keysField.FieldType.GetElementType() ?? typeof(string);
@@ -897,7 +903,7 @@ namespace DataGraph.Editor.Commands
                 object value = kvp.Value switch
                 {
                     Domain.ParsedValue val => ConvertForSource(valueElementType, val.Value),
-                    Domain.ParsedObject obj => PopulateSource(valueElementType, obj),
+                    Domain.ParsedObject obj => PopulateSource(cache, valueElementType, obj),
                     _ => null
                 };
                 valuesList.Add(value);
@@ -914,7 +920,7 @@ namespace DataGraph.Editor.Commands
             valuesField.SetValue(instance, valuesArray);
         }
 
-        private static Array PopulateSourceArray(Type fieldType, Domain.ParsedArray arr)
+        private static Array PopulateSourceArray(ReflectionCache cache, Type fieldType, Domain.ParsedArray arr)
         {
             var elementType = fieldType.GetElementType();
             if (elementType == null) return null;
@@ -925,7 +931,7 @@ namespace DataGraph.Editor.Commands
                 object element = arr.Elements[i] switch
                 {
                     Domain.ParsedValue val => ConvertForSource(elementType, val.Value),
-                    Domain.ParsedObject obj => PopulateSource(elementType, obj),
+                    Domain.ParsedObject obj => PopulateSource(cache, elementType, obj),
                     _ => null
                 };
                 if (element != null) array.SetValue(element, i);

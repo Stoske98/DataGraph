@@ -86,12 +86,7 @@ namespace DataGraph.OneDrive
             request.redirectLimit = 10;
             request.timeout = 30;
 
-            var operation = request.SendWebRequest();
-            while (!operation.isDone)
-            {
-                ct.ThrowIfCancellationRequested();
-                await Task.Delay(50, ct);
-            }
+            await request.SendAsync(ct);
 
             if (request.result != UnityWebRequest.Result.Success)
             {

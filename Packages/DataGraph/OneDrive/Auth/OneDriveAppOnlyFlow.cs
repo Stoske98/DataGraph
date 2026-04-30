@@ -61,13 +61,7 @@ namespace DataGraph.OneDrive.Auth
             try
             {
                 using var request = UnityWebRequest.Post(url, form);
-                var operation = request.SendWebRequest();
-
-                while (!operation.isDone)
-                {
-                    ct.ThrowIfCancellationRequested();
-                    await Task.Delay(50, ct);
-                }
+                await request.SendAsync(ct);
 
                 if (request.result != UnityWebRequest.Result.Success)
                     return Result<string>.Failure(

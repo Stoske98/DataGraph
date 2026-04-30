@@ -64,12 +64,7 @@ namespace DataGraph.GoogleSheets.Fetch
                     request.SetRequestHeader("Authorization",
                         $"Bearer {credentials.BearerToken}");
 
-                var operation = request.SendWebRequest();
-                while (!operation.isDone)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    await Task.Yield();
-                }
+                await request.SendAsync(cancellationToken);
 
                 if (request.result != UnityWebRequest.Result.Success)
                     return MapHttpError(request);
@@ -127,12 +122,7 @@ namespace DataGraph.GoogleSheets.Fetch
                     request.SetRequestHeader("Authorization",
                         $"Bearer {credentials.BearerToken}");
 
-                var operation = request.SendWebRequest();
-                while (!operation.isDone)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    await Task.Yield();
-                }
+                await request.SendAsync(cancellationToken);
 
                 if (request.result != UnityWebRequest.Result.Success)
                     return MapHttpError(request);
