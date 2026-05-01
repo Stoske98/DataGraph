@@ -452,7 +452,8 @@ namespace DataGraph.Editor.Commands
 
                 var buildParams = buildMethod.GetParameters();
                 object[] buildArgs;
-                var blobReflectionCache = new ReflectionCache();
+                var blobPopulator = new ReflectionPopulator(
+                    new ReflectionCache(), new BlobConverter());
 
                 if (parseResult.Value.Root is Domain.ParsedDictionary dict)
                 {
@@ -465,7 +466,7 @@ namespace DataGraph.Editor.Commands
                     {
                         var key = keyType == typeof(int) ? (object)Convert.ToInt32(kvp.Key) : kvp.Key.ToString();
                         keys.SetValue(key, idx);
-                        var source = PopulateSource(blobReflectionCache, sourceType, kvp.Value);
+                        var source = blobPopulator.Populate(sourceType, kvp.Value);
                         values.SetValue(source, idx);
                         idx++;
                     }
@@ -477,14 +478,14 @@ namespace DataGraph.Editor.Commands
                     var values = Array.CreateInstance(sourceType, arr.Elements.Count);
                     for (int i = 0; i < arr.Elements.Count; i++)
                     {
-                        var source = PopulateSource(blobReflectionCache, sourceType, arr.Elements[i]);
+                        var source = blobPopulator.Populate(sourceType, arr.Elements[i]);
                         values.SetValue(source, i);
                     }
                     buildArgs = new object[] { values };
                 }
                 else if (parseResult.Value.Root is Domain.ParsedObject obj)
                 {
-                    var source = PopulateSource(blobReflectionCache, sourceType, obj);
+                    var source = blobPopulator.Populate(sourceType, obj);
                     buildArgs = new object[] { source };
                 }
                 else
@@ -622,25 +623,36 @@ namespace DataGraph.Editor.Commands
                 }
 
                 var quantumReflectionCache = new ReflectionCache();
+                var quantumPopulator = new ReflectionPopulator(
+                    quantumReflectionCache, new QuantumConverter(quantumReflectionCache));
+
+                object MakeQuantumEntry(Domain.ParsedNode node, object key)
+                {
+                    var instance = Activator.CreateInstance(entryType);
+                    if (key != null)
+                    {
+                        var idField = quantumReflectionCache.GetField(entryType, "id");
+                        if (idField != null)
+                            idField.SetValue(instance,
+                                ScalarConverter.Convert(idField.FieldType, key));
+                    }
+                    if (node is Domain.ParsedObject obj)
+                        quantumPopulator.PopulateInto(entryType, obj, instance);
+                    return instance;
+                }
+
                 switch (parseResult.Value.Root)
                 {
                     case Domain.ParsedDictionary dict:
                         foreach (var kvp in dict.Entries)
-                        {
-                            var entry = PopulateQuantumEntry(quantumReflectionCache, entryType, kvp.Value, kvp.Key);
-                            entriesList.Add(entry);
-                        }
+                            entriesList.Add(MakeQuantumEntry(kvp.Value, kvp.Key));
                         break;
                     case Domain.ParsedArray arr:
                         foreach (var element in arr.Elements)
-                        {
-                            var entry = PopulateQuantumEntry(quantumReflectionCache, entryType, element, null);
-                            entriesList.Add(entry);
-                        }
+                            entriesList.Add(MakeQuantumEntry(element, null));
                         break;
                     case Domain.ParsedObject obj:
-                        var singleEntry = PopulateQuantumEntry(quantumReflectionCache, entryType, obj, null);
-                        entriesList.Add(singleEntry);
+                        entriesList.Add(MakeQuantumEntry(obj, null));
                         break;
                 }
 
@@ -674,291 +686,10 @@ namespace DataGraph.Editor.Commands
             }
         }
 
-        private static readonly System.Reflection.BindingFlags PublicInstance =
-            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance;
-
-        private static readonly System.Reflection.BindingFlags PublicStatic =
-            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static;
-
-        private static readonly Type[] FloatParam = { typeof(float) };
-
-        private static object PopulateQuantumEntry(ReflectionCache cache, Type entryType,
-            Domain.ParsedNode node, object key)
-        {
-            var instance = Activator.CreateInstance(entryType);
-
-            if (key != null)
-            {
-                var idField = cache.GetField(entryType, "id");
-                if (idField != null)
-                    idField.SetValue(instance, ConvertForSource(idField.FieldType, key));
-            }
-
-            if (node is Domain.ParsedObject obj)
-            {
-                foreach (var child in obj.Children)
-                {
-                    if (child is Domain.ParsedDictionary childDict)
-                    {
-                        PopulateQuantumDictLists(cache, entryType, childDict, instance);
-                        continue;
-                    }
-
-                    var field = cache.GetField(entryType, child.FieldName, PublicInstance);
-                    if (field == null) continue;
-
-                    object value = child switch
-                    {
-                        Domain.ParsedValue val => ConvertQuantumValue(cache, field.FieldType, val.Value),
-                        Domain.ParsedAssetReference assetRef => ConvertQuantumAsset(field.FieldType, assetRef),
-                        Domain.ParsedObject childObj => PopulateQuantumEntry(cache, field.FieldType, childObj, null),
-                        Domain.ParsedArray childArr => PopulateQuantumList(cache, field.FieldType, childArr),
-                        _ => null
-                    };
-
-                    if (value != null)
-                        field.SetValue(instance, value);
-                }
-            }
-
-            return instance;
-        }
-
-        private static object PopulateQuantumList(ReflectionCache cache, Type fieldType, Domain.ParsedArray arr)
-        {
-            if (!fieldType.IsGenericType) return null;
-
-            var elementType = fieldType.GetGenericArguments()[0];
-            var list = (System.Collections.IList)Activator.CreateInstance(fieldType);
-
-            foreach (var element in arr.Elements)
-            {
-                object item = element switch
-                {
-                    Domain.ParsedValue val => ConvertQuantumValue(cache, elementType, val.Value),
-                    Domain.ParsedObject obj => PopulateQuantumEntry(cache, elementType, obj, null),
-                    _ => null
-                };
-                if (item != null) list.Add(item);
-            }
-
-            return list;
-        }
-
-        private static void PopulateQuantumDictLists(ReflectionCache cache, Type entryType,
-            Domain.ParsedDictionary dict, object instance)
-        {
-            var keysField = cache.GetField(entryType, dict.FieldName + "Keys");
-            var valuesField = cache.GetField(entryType, dict.FieldName + "Values");
-            if (keysField == null || valuesField == null)
-            {
-                Debug.LogWarning(
-                    $"DataGraph (Quantum): expected fields '{dict.FieldName}Keys' and '{dict.FieldName}Values' " +
-                    $"on type '{entryType.FullName}' for dictionary serialization. Skipping. " +
-                    "Re-run code generation if the schema changed.");
-                return;
-            }
-
-            var keysList = (System.Collections.IList)keysField.GetValue(instance);
-            var valuesList = (System.Collections.IList)valuesField.GetValue(instance);
-            if (keysList == null || valuesList == null) return;
-
-            var valueElementType = valuesField.FieldType.GetGenericArguments()[0];
-
-            foreach (var kvp in dict.Entries)
-            {
-                var key = ConvertForSource(keysField.FieldType.GetGenericArguments()[0], kvp.Key);
-                if (key != null) keysList.Add(key);
-
-                object value = kvp.Value switch
-                {
-                    Domain.ParsedValue val => ConvertQuantumValue(cache, valueElementType, val.Value),
-                    Domain.ParsedObject obj => PopulateQuantumEntry(cache, valueElementType, obj, null),
-                    _ => null
-                };
-                if (value != null) valuesList.Add(value);
-            }
-        }
-
-        private static object ConvertQuantumValue(ReflectionCache cache, Type targetType, object value)
-        {
-            if (value == null) return null;
-
-            var typeName = targetType.FullName;
-
-            if (typeName == "Photon.Deterministic.FP")
-            {
-                var fromFloat = cache.GetMethod(targetType, "FromFloat_UNSAFE", PublicStatic, FloatParam);
-                if (fromFloat != null)
-                    return fromFloat.Invoke(null, new object[] { Convert.ToSingle(value) });
-            }
-
-            if (typeName == "Photon.Deterministic.FPVector2")
-            {
-                if (value is UnityEngine.Vector2 v2)
-                {
-                    var fpType = cache.FindType("Photon.Deterministic.FP");
-                    var fromFloat = fpType == null
-                        ? null
-                        : cache.GetMethod(fpType, "FromFloat_UNSAFE", PublicStatic, FloatParam);
-                    if (fromFloat != null)
-                    {
-                        var x = fromFloat.Invoke(null, new object[] { v2.x });
-                        var y = fromFloat.Invoke(null, new object[] { v2.y });
-                        var ctor = targetType.GetConstructor(new[] { fpType, fpType });
-                        if (ctor != null) return ctor.Invoke(new[] { x, y });
-                    }
-                }
-            }
-
-            if (typeName == "Photon.Deterministic.FPVector3")
-            {
-                if (value is UnityEngine.Vector3 v3)
-                {
-                    var fpType = cache.FindType("Photon.Deterministic.FP");
-                    var fromFloat = fpType == null
-                        ? null
-                        : cache.GetMethod(fpType, "FromFloat_UNSAFE", PublicStatic, FloatParam);
-                    if (fromFloat != null)
-                    {
-                        var x = fromFloat.Invoke(null, new object[] { v3.x });
-                        var y = fromFloat.Invoke(null, new object[] { v3.y });
-                        var z = fromFloat.Invoke(null, new object[] { v3.z });
-                        var ctor = targetType.GetConstructor(new[] { fpType, fpType, fpType });
-                        if (ctor != null) return ctor.Invoke(new[] { x, y, z });
-                    }
-                }
-            }
-
-            return ConvertForSource(targetType, value);
-        }
-
-        private static object ConvertQuantumAsset(Type fieldType, Domain.ParsedAssetReference assetRef)
-        {
-            if (string.IsNullOrEmpty(assetRef.AssetPath)) return null;
-            if (fieldType == typeof(string)) return assetRef.AssetPath;
-
-            var loadType = Domain.AssetTypeMapper.GetSystemType(assetRef.AssetType);
-            return AssetDatabase.LoadAssetAtPath(assetRef.AssetPath, loadType);
-        }
-
-        private static object PopulateSource(ReflectionCache cache, Type sourceType, Domain.ParsedNode node)
-        {
-            var instance = Activator.CreateInstance(sourceType);
-
-            if (node is Domain.ParsedObject obj)
-            {
-                foreach (var child in obj.Children)
-                {
-                    if (child is Domain.ParsedDictionary childDict)
-                    {
-                        PopulateSourceDictLists(cache, sourceType, childDict, instance);
-                        continue;
-                    }
-
-                    var field = cache.GetField(sourceType, child.FieldName, PublicInstance);
-                    if (field == null)
-                    {
-                        Debug.LogWarning(
-                            $"DataGraph (Blob): field '{child.FieldName}' not found on source type " +
-                            $"'{sourceType.FullName}'. Skipping. Re-run code generation if the schema changed.");
-                        continue;
-                    }
-
-                    object value = child switch
-                    {
-                        Domain.ParsedValue val => ConvertForSource(field.FieldType, val.Value),
-                        Domain.ParsedAssetReference assetRef => assetRef.AssetPath ?? "",
-                        Domain.ParsedObject childObj => PopulateSource(cache, field.FieldType, childObj),
-                        Domain.ParsedArray childArr => PopulateSourceArray(cache, field.FieldType, childArr),
-                        _ => null
-                    };
-
-                    if (value != null)
-                        field.SetValue(instance, value);
-                }
-            }
-
-            return instance;
-        }
-
-        private static void PopulateSourceDictLists(ReflectionCache cache, Type sourceType,
-            Domain.ParsedDictionary dict, object instance)
-        {
-            var keysField = cache.GetField(sourceType, dict.FieldName + "Keys", PublicInstance);
-            var valuesField = cache.GetField(sourceType, dict.FieldName + "Values", PublicInstance);
-            if (keysField == null || valuesField == null) return;
-
-            var keyElementType = keysField.FieldType.GetElementType() ?? typeof(string);
-            var valueElementType = valuesField.FieldType.GetElementType() ?? typeof(object);
-
-            var keysList = new System.Collections.Generic.List<object>();
-            var valuesList = new System.Collections.Generic.List<object>();
-
-            foreach (var kvp in dict.Entries)
-            {
-                var key = ConvertForSource(keyElementType, kvp.Key);
-                if (key != null) keysList.Add(key);
-
-                object value = kvp.Value switch
-                {
-                    Domain.ParsedValue val => ConvertForSource(valueElementType, val.Value),
-                    Domain.ParsedObject obj => PopulateSource(cache, valueElementType, obj),
-                    _ => null
-                };
-                valuesList.Add(value);
-            }
-
-            var keysArray = Array.CreateInstance(keyElementType, keysList.Count);
-            for (int i = 0; i < keysList.Count; i++)
-                keysArray.SetValue(keysList[i], i);
-            keysField.SetValue(instance, keysArray);
-
-            var valuesArray = Array.CreateInstance(valueElementType, valuesList.Count);
-            for (int i = 0; i < valuesList.Count; i++)
-                if (valuesList[i] != null) valuesArray.SetValue(valuesList[i], i);
-            valuesField.SetValue(instance, valuesArray);
-        }
-
-        private static Array PopulateSourceArray(ReflectionCache cache, Type fieldType, Domain.ParsedArray arr)
-        {
-            var elementType = fieldType.GetElementType();
-            if (elementType == null) return null;
-
-            var array = Array.CreateInstance(elementType, arr.Elements.Count);
-            for (int i = 0; i < arr.Elements.Count; i++)
-            {
-                object element = arr.Elements[i] switch
-                {
-                    Domain.ParsedValue val => ConvertForSource(elementType, val.Value),
-                    Domain.ParsedObject obj => PopulateSource(cache, elementType, obj),
-                    _ => null
-                };
-                if (element != null) array.SetValue(element, i);
-            }
-            return array;
-        }
-
-        private static object ConvertForSource(Type targetType, object value)
-        {
-            if (value == null) return targetType == typeof(string) ? "" : null;
-            if (targetType.IsInstanceOfType(value)) return value;
-            if (targetType == typeof(string)) return value.ToString();
-            if (targetType == typeof(int)) return Convert.ToInt32(value);
-            if (targetType == typeof(float)) return Convert.ToSingle(value);
-            if (targetType == typeof(double)) return Convert.ToDouble(value);
-            if (targetType == typeof(bool)) return Convert.ToBoolean(value);
-            if (targetType.IsEnum) return EnumParser.Parse(targetType, value.ToString());
-
-            try { return Convert.ChangeType(value, targetType, System.Globalization.CultureInfo.InvariantCulture); }
-            catch (Exception ex)
-            {
-                Debug.LogWarning(
-                    $"DataGraph: failed to convert value '{value}' (type {value.GetType().Name}) " +
-                    $"to '{targetType.Name}': {ex.Message}. Falling back to default.");
-                return targetType.IsValueType ? Activator.CreateInstance(targetType) : null;
-            }
-        }
+        // Reflection-based population of generated entry/source/Quantum
+        // types now lives in Editor/Reflection (ReflectionPopulator +
+        // {SO,Blob,Quantum}Converter). ParseGraphCommand only orchestrates
+        // the pipeline.
 
         private static void UpdateRegistry(Action<DataGraph.Runtime.DataGraphRegistry> action)
         {

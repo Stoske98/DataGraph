@@ -1,12 +1,11 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Reflection;
 using DataGraph.Editor.Domain;
 using DataGraph.Editor.IO;
-using DataGraph.Editor.Parsing;
+using DataGraph.Editor.Reflection;
 using DataGraph.Runtime;
 using UnityEditor;
 using UnityEngine;
@@ -43,18 +42,20 @@ namespace DataGraph.Editor.Serialization
                     return Result<string>.Failure($"Type '{entryTypeName}' not found.");
 
                 var assetCache = PreloadAssets(tree.Root);
+                var converter = new SOConverter(assetCache);
+                var populator = new ReflectionPopulator(new ReflectionCache(), converter);
                 var dbAsset = ScriptableObject.CreateInstance(dbType);
 
                 switch (tree.Root)
                 {
                     case ParsedDictionary dict:
-                        PopulateDictionary(dbAsset, dict, entryType, assetCache);
+                        PopulateDictionary(dbAsset, dict, entryType, populator, converter);
                         break;
                     case ParsedArray arr:
-                        PopulateArray(dbAsset, arr, entryType, assetCache);
+                        PopulateArray(dbAsset, arr, entryType, populator);
                         break;
                     case ParsedObject obj:
-                        PopulateObject(dbAsset, obj, entryType, assetCache);
+                        PopulateObject(dbAsset, obj, entryType, populator);
                         break;
                 }
 
@@ -76,8 +77,7 @@ namespace DataGraph.Editor.Serialization
             }
         }
 
-        private static void PopulateDictionary(ScriptableObject dbAsset, ParsedDictionary dict, Type entryType,
-            Dictionary<string, UnityEngine.Object> assetCache)
+        private static MethodInfo GetSetData(ScriptableObject dbAsset, string kindLabel)
         {
             var setDataMethod = dbAsset.GetType().GetMethod("SetData",
                 BindingFlags.Public | BindingFlags.Instance);
@@ -85,9 +85,16 @@ namespace DataGraph.Editor.Serialization
             {
                 Debug.LogWarning(
                     $"DataGraph (SO): 'SetData' method not found on '{dbAsset.GetType().FullName}'. " +
-                    "Dictionary database will be empty. Re-run code generation.");
-                return;
+                    $"{kindLabel} database will be empty. Re-run code generation.");
             }
+            return setDataMethod;
+        }
+
+        private static void PopulateDictionary(ScriptableObject dbAsset, ParsedDictionary dict, Type entryType,
+            ReflectionPopulator populator, SOConverter converter)
+        {
+            var setDataMethod = GetSetData(dbAsset, "Dictionary");
+            if (setDataMethod == null) return;
 
             var keyType = dict.KeyTypeName == "int" ? typeof(int) : typeof(string);
             var keysList = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(keyType));
@@ -95,166 +102,33 @@ namespace DataGraph.Editor.Serialization
 
             foreach (var kvp in dict.Entries)
             {
-                var key = ConvertValue(keyType, kvp.Key);
-                keysList.Add(key);
-
-                var entry = CreateAndPopulate(entryType, kvp.Value, assetCache);
-                entriesList.Add(entry);
+                keysList.Add(converter.ConvertScalar(keyType, kvp.Key));
+                entriesList.Add(populator.Populate(entryType, kvp.Value));
             }
 
             setDataMethod.Invoke(dbAsset, new object[] { keysList, entriesList });
         }
 
         private static void PopulateArray(ScriptableObject dbAsset, ParsedArray arr, Type entryType,
-            Dictionary<string, UnityEngine.Object> assetCache)
+            ReflectionPopulator populator)
         {
-            var setDataMethod = dbAsset.GetType().GetMethod("SetData",
-                BindingFlags.Public | BindingFlags.Instance);
-            if (setDataMethod == null)
-            {
-                Debug.LogWarning(
-                    $"DataGraph (SO): 'SetData' method not found on '{dbAsset.GetType().FullName}'. " +
-                    "Array database will be empty. Re-run code generation.");
-                return;
-            }
+            var setDataMethod = GetSetData(dbAsset, "Array");
+            if (setDataMethod == null) return;
 
             var entriesList = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(entryType));
-
             foreach (var element in arr.Elements)
-            {
-                var entry = CreateAndPopulate(entryType, element, assetCache);
-                entriesList.Add(entry);
-            }
+                entriesList.Add(populator.Populate(entryType, element));
 
             setDataMethod.Invoke(dbAsset, new object[] { entriesList });
         }
 
         private static void PopulateObject(ScriptableObject dbAsset, ParsedObject obj, Type entryType,
-            Dictionary<string, UnityEngine.Object> assetCache)
+            ReflectionPopulator populator)
         {
-            var setDataMethod = dbAsset.GetType().GetMethod("SetData",
-                BindingFlags.Public | BindingFlags.Instance);
-            if (setDataMethod == null)
-            {
-                Debug.LogWarning(
-                    $"DataGraph (SO): 'SetData' method not found on '{dbAsset.GetType().FullName}'. " +
-                    "Object database will be empty. Re-run code generation.");
-                return;
-            }
+            var setDataMethod = GetSetData(dbAsset, "Object");
+            if (setDataMethod == null) return;
 
-            var data = CreateAndPopulate(entryType, obj, assetCache);
-            setDataMethod.Invoke(dbAsset, new object[] { data });
-        }
-
-        private static object CreateAndPopulate(Type type, ParsedNode node,
-            Dictionary<string, UnityEngine.Object> assetCache)
-        {
-            if (node is ParsedObject obj)
-            {
-                var instance = Activator.CreateInstance(type);
-
-                foreach (var child in obj.Children)
-                {
-                    var field = type.GetField(child.FieldName,
-                        BindingFlags.Public | BindingFlags.Instance);
-                    if (field == null) continue;
-
-                    var value = ResolveValue(field.FieldType, child, assetCache);
-                    if (value != null)
-                        field.SetValue(instance, value);
-                }
-
-                return instance;
-            }
-
-            if (node is ParsedValue val)
-                return ConvertValue(type, val.Value);
-
-            return null;
-        }
-
-        private static object ResolveValue(Type fieldType, ParsedNode node,
-            Dictionary<string, UnityEngine.Object> assetCache)
-        {
-            switch (node)
-            {
-                case ParsedAssetReference assetRef:
-                    return ResolveAssetReference(assetRef, assetCache);
-
-                case ParsedValue val:
-                    return ConvertValue(fieldType, val.Value);
-
-                case ParsedObject obj:
-                    return CreateAndPopulate(fieldType, obj, assetCache);
-
-                case ParsedArray arr:
-                {
-                    var elementType = fieldType.IsGenericType
-                        ? fieldType.GetGenericArguments()[0]
-                        : typeof(object);
-                    var list = (IList)Activator.CreateInstance(
-                        typeof(List<>).MakeGenericType(elementType));
-                    foreach (var element in arr.Elements)
-                    {
-                        var item = element is ParsedValue pv
-                            ? ConvertValue(elementType, pv.Value)
-                            : CreateAndPopulate(elementType, element, assetCache);
-                        if (item != null) list.Add(item);
-                    }
-                    return list;
-                }
-
-                case ParsedDictionary dict:
-                {
-                    if (!fieldType.IsGenericType) return null;
-                    var keyType = fieldType.GetGenericArguments()[0];
-                    var valueType = fieldType.GetGenericArguments()[1];
-                    var dictInstance = (IDictionary)Activator.CreateInstance(fieldType);
-                    foreach (var kvp in dict.Entries)
-                    {
-                        var key = ConvertValue(keyType, kvp.Key);
-                        var value = kvp.Value is ParsedValue pv
-                            ? ConvertValue(valueType, pv.Value)
-                            : CreateAndPopulate(valueType, kvp.Value, assetCache);
-                        if (key != null) dictInstance[key] = value;
-                    }
-                    return dictInstance;
-                }
-
-                default:
-                    return null;
-            }
-        }
-
-        private static object ConvertValue(Type targetType, object value)
-        {
-            if (value == null) return null;
-            if (targetType.IsInstanceOfType(value)) return value;
-
-            try
-            {
-                if (targetType == typeof(int)) return Convert.ToInt32(value);
-                if (targetType == typeof(float)) return Convert.ToSingle(value);
-                if (targetType == typeof(double)) return Convert.ToDouble(value);
-                if (targetType == typeof(bool)) return Convert.ToBoolean(value);
-                if (targetType == typeof(string)) return value.ToString();
-                if (targetType.IsEnum) return EnumParser.Parse(targetType, value.ToString());
-                return Convert.ChangeType(value, targetType, CultureInfo.InvariantCulture);
-            }
-            catch
-            {
-                return targetType.IsValueType ? Activator.CreateInstance(targetType) : null;
-            }
-        }
-
-        private static object ResolveAssetReference(ParsedAssetReference assetRef,
-            Dictionary<string, UnityEngine.Object> assetCache)
-        {
-            if (string.IsNullOrEmpty(assetRef.AssetPath))
-                return null;
-
-            assetCache.TryGetValue(assetRef.AssetPath, out var cached);
-            return cached;
+            setDataMethod.Invoke(dbAsset, new object[] { populator.Populate(entryType, obj) });
         }
 
         /// <summary>
