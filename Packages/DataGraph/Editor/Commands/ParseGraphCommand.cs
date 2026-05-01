@@ -40,6 +40,22 @@ namespace DataGraph.Editor.Commands
             public bool GenerateQuantum { get; set; }
         }
 
+        // Pipelines run in this order for non-enum graphs. Enum/flag graphs
+        // route through EnumPipeline only (skipping DataValidator and the
+        // SO/Blob/Quantum/JSON pipelines, which would have nothing to write).
+        private static readonly Pipelines.IOutputPipeline[] DataPipelines =
+        {
+            new Pipelines.SOPipeline(),
+            new Pipelines.BlobPipeline(),
+            new Pipelines.QuantumPipeline(),
+            new Pipelines.JsonPipeline(),
+        };
+
+        private static readonly Pipelines.IOutputPipeline[] EnumPipelines =
+        {
+            new Pipelines.EnumPipeline(),
+        };
+
         /// <summary>
         /// Runs the full pipeline, logging each step to the provided log group.
         /// </summary>
@@ -70,20 +86,17 @@ namespace DataGraph.Editor.Commands
                 var graph = adaptResult.Value;
                 log.LogInfo($"Adapt: {graph.AllNodes.Count} nodes resolved");
 
-                // Early branch for Enum/Flag definition graphs
-                if (graph.Root is ParseableEnumRoot || graph.Root is ParseableFlagRoot)
-                {
-                    return await ExecuteEnumPipelineAsync(
-                        graph, graphAsset, provider, outputBasePath, log, cancellationToken);
-                }
+                var isEnumGraph = graph.Root is ParseableEnumRoot
+                    || graph.Root is ParseableFlagRoot;
 
-                // Extract referenced columns for optimized fetching
-                var columns = ColumnExtractor.GetReferencedColumns(graph);
+                // 2. Fetch (column-optimized for data graphs, full for enum graphs)
+                var columns = isEnumGraph
+                    ? null
+                    : ColumnExtractor.GetReferencedColumns(graph);
                 if (columns != null)
                     log.LogInfo($"Fetch: optimized — requesting {columns.Count} columns: {string.Join(", ", columns)}");
 
-                // 2. Fetch
-                log.LogInfo($"Fetch: requesting data from sheet...");
+                log.LogInfo("Fetch: requesting data from sheet...");
                 var sheetRef = new SheetReference(
                     graph.SheetId, graph.HeaderRowOffset, graph.SheetName, columns);
                 var fetchResult = await provider.FetchAsync(sheetRef, cancellationToken);
@@ -109,146 +122,50 @@ namespace DataGraph.Editor.Commands
 
                 var dataTree = parseResult.Value;
                 foreach (var warning in dataTree.ParseWarnings)
-                {
                     log.LogWarning($"Parse: {warning.Message}");
-                }
-
                 log.LogInfo("Parse: completed");
 
-                // 4. Validate
-                log.LogInfo("Validate: checking parsed data...");
-                var report = _dataValidator.Validate(dataTree);
-                foreach (var entry in report.Entries)
+                // 4. Validate (data graphs only)
+                if (!isEnumGraph)
                 {
-                    switch (entry.Severity)
+                    log.LogInfo("Validate: checking parsed data...");
+                    var report = _dataValidator.Validate(dataTree);
+                    foreach (var entry in report.Entries)
                     {
-                        case ValidationSeverity.Error:
-                            log.LogError($"Validate: {entry.Message}");
-                            break;
-                        case ValidationSeverity.Warning:
-                            log.LogWarning($"Validate: {entry.Message}");
-                            break;
-                        case ValidationSeverity.Info:
-                            log.LogInfo($"Validate: {entry.Message}");
-                            break;
+                        switch (entry.Severity)
+                        {
+                            case ValidationSeverity.Error: log.LogError($"Validate: {entry.Message}"); break;
+                            case ValidationSeverity.Warning: log.LogWarning($"Validate: {entry.Message}"); break;
+                            case ValidationSeverity.Info: log.LogInfo($"Validate: {entry.Message}"); break;
+                        }
+                    }
+                    if (report.HasErrors)
+                    {
+                        log.LogError("Validate: failed with errors, aborting output generation");
+                        log.Complete(false);
+                        return false;
                     }
                 }
 
-                if (report.HasErrors)
-                {
-                    log.LogError("Validate: failed with errors, aborting output generation");
-                    log.Complete(false);
-                    return false;
-                }
-
+                // 5. Run output pipelines
                 var generatedFiles = new List<string>();
                 var graphOutputPath = Path.Combine(outputBasePath, graphName);
+                var ctx = new Pipelines.PipelineContext(
+                    graphName, graph, dataTree, outputBasePath,
+                    graphOutputPath, formats, log, generatedFiles);
 
-                // 5. Generate C# (if SO)
-                if (formats.GenerateSO)
+                var pipelines = isEnumGraph ? EnumPipelines : DataPipelines;
+                foreach (var pipeline in pipelines)
                 {
-                    log.LogInfo("Generate: creating C# classes...");
-                    var soPath = Path.Combine(graphOutputPath, "SO");
-                    var codeGen = new CodeGenerator();
-
-                    var entriesResult = codeGen.GenerateEntries(graph);
-                    if (entriesResult.IsFailure)
+                    if (!pipeline.ShouldRun(ctx)) continue;
+                    if (!await pipeline.ExecuteAsync(ctx, cancellationToken))
                     {
-                        log.LogError($"Generate failed: {entriesResult.Error}");
                         log.Complete(false);
                         return false;
                     }
-
-                    var csPath = Path.Combine(soPath, $"{graphName}.cs");
-                    PathUtilities.EnsureDirectory(csPath);
-                    File.WriteAllText(csPath, entriesResult.Value);
-                    generatedFiles.Add(csPath);
-
-                    var dbResult = codeGen.GenerateDatabase(graph);
-                    if (dbResult.IsFailure)
-                    {
-                        log.LogError($"Generate failed: {dbResult.Error}");
-                        log.Complete(false);
-                        return false;
-                    }
-
-                    var dbCsPath = Path.Combine(soPath, $"{graphName}Database.cs");
-                    File.WriteAllText(dbCsPath, dbResult.Value);
-                    generatedFiles.Add(dbCsPath);
-
-                    log.LogInfo($"Generate: SO/{graphName}.cs + SO/{graphName}Database.cs");
-                }
-
-                // 5b. Generate Blob structs (if Blob)
-                if (formats.GenerateBlob)
-                {
-                    log.LogInfo("Generate: creating Blob structs...");
-                    var blobPath = Path.Combine(graphOutputPath, "Blob");
-                    var blobGenResult = InvokeBlobCodeGen(graph, blobPath, graphName);
-                    if (blobGenResult.IsFailure)
-                    {
-                        log.LogError($"Blob generate failed: {blobGenResult.Error}");
-                        log.Complete(false);
-                        return false;
-                    }
-                    generatedFiles.AddRange(blobGenResult.Value);
-                    log.LogInfo($"Generate: Blob/{graphName}Blob.cs + Blob/{graphName}BlobDatabase.cs + Blob/{graphName}BlobBuilder.cs");
-                }
-
-                // 5c. Generate Quantum AssetObject (if Quantum)
-                if (formats.GenerateQuantum)
-                {
-                    log.LogInfo("Generate: creating Quantum AssetObject classes...");
-                    var quantumGen = new CodeGen.QuantumCodeGenerator();
-                    var quantumResult = quantumGen.Generate(graph);
-                    if (quantumResult.IsFailure)
-                    {
-                        log.LogError($"Quantum generate failed: {quantumResult.Error}");
-                        log.Complete(false);
-                        return false;
-                    }
-
-                    var quantumPath = $"Assets/QuantumUser/Simulation/DataGraph/{graphName}";
-                    var quantumCsPath = Path.Combine(quantumPath, $"{graphName}QuantumDatabase.cs");
-                    PathUtilities.EnsureDirectory(quantumCsPath);
-                    File.WriteAllText(quantumCsPath, quantumResult.Value);
-                    generatedFiles.Add(quantumCsPath);
-                    log.LogInfo($"Generate: QuantumUser/Simulation/DataGraph/{graphName}/{graphName}QuantumDatabase.cs");
-                }
-
-                // 6. Serialize JSON
-                if (formats.GenerateJSON)
-                {
-                    log.LogInfo("Serialize: writing JSON output...");
-                    var jsonPath = Path.Combine(graphOutputPath, "JSON");
-                    var jsonSerializer = new JsonDataSerializer();
-                    var jsonResult = jsonSerializer.Serialize(dataTree);
-                    if (jsonResult.IsFailure)
-                    {
-                        log.LogError($"Serialize failed: {jsonResult.Error}");
-                        log.Complete(false);
-                        return false;
-                    }
-
-                    var jsonFilePath = Path.Combine(jsonPath, $"{graphName}.json");
-                    PathUtilities.EnsureDirectory(jsonFilePath);
-                    File.WriteAllText(jsonFilePath, jsonResult.Value);
-                    generatedFiles.Add(jsonFilePath);
-
-                    var schemaGen = new JsonSchemaGenerator();
-                    var schemaResult = schemaGen.Generate(graph);
-                    if (schemaResult.IsSuccess)
-                    {
-                        var schemaPath = Path.Combine(jsonPath, $"{graphName}.schema.json");
-                        File.WriteAllText(schemaPath, schemaResult.Value);
-                        generatedFiles.Add(schemaPath);
-                    }
-
-                    log.LogInfo($"Serialize: JSON/{graphName}.json + schema");
                 }
 
                 AssetDatabase.Refresh();
-
                 log.LogSuccess($"Done: {generatedFiles.Count} file(s) generated");
                 log.Complete(true);
                 return true;
@@ -717,136 +634,5 @@ namespace DataGraph.Editor.Commands
             AssetDatabase.SaveAssets();
         }
 
-        /// <summary>
-        /// Shortened pipeline for Enum/Flag graphs: Fetch -> Parse -> Generate enum C#.
-        /// No SO/Blob/Quantum/JSON output — only a single .cs file with the enum definition.
-        /// </summary>
-        private async Task<bool> ExecuteEnumPipelineAsync(
-            ParseableGraph graph,
-            DataGraphAsset graphAsset,
-            ISheetProvider provider,
-            string outputBasePath,
-            GraphLogGroup log,
-            CancellationToken cancellationToken)
-        {
-            var graphName = graph.GraphName;
-            var isFlag = graph.Root is ParseableFlagRoot;
-            var kind = isFlag ? "Flag" : "Enum";
-
-            try
-            {
-                log.LogInfo($"Fetch: requesting data for {kind} '{graphName}'...");
-                var sheetRef = new SheetReference(
-                    graph.SheetId, graph.HeaderRowOffset, graph.SheetName);
-                var fetchResult = await provider.FetchAsync(sheetRef, cancellationToken);
-                if (fetchResult.IsFailure)
-                {
-                    log.LogError($"Fetch failed: {fetchResult.Error}");
-                    log.Complete(false);
-                    return false;
-                }
-
-                log.LogInfo($"Fetch: {fetchResult.Value.RowCount} rows");
-
-                log.LogInfo($"Parse: extracting {kind} members...");
-                var parseResult = _parserEngine.Parse(fetchResult.Value, graph);
-                if (parseResult.IsFailure)
-                {
-                    log.LogError($"Parse failed: {parseResult.Error}");
-                    log.Complete(false);
-                    return false;
-                }
-
-                foreach (var warning in parseResult.Value.ParseWarnings)
-                    log.LogWarning($"Parse: {warning.Message}");
-
-                var enumDef = parseResult.Value.Root as ParsedEnumDefinition;
-                if (enumDef == null)
-                {
-                    log.LogError("Parse produced unexpected result type.");
-                    log.Complete(false);
-                    return false;
-                }
-
-                log.LogInfo($"Parse: {enumDef.Members.Count} members found");
-
-                log.LogInfo($"Generate: creating {kind} source...");
-                var codeGen = new CodeGen.CodeGenerator();
-                var genResult = codeGen.GenerateEnum(enumDef);
-                if (genResult.IsFailure)
-                {
-                    log.LogError($"Generate failed: {genResult.Error}");
-                    log.Complete(false);
-                    return false;
-                }
-
-                var subfolder = isFlag ? "Flags" : "Enums";
-                string csPath;
-
-                if (ProviderRegistry.IsQuantumAvailable())
-                    csPath = $"Assets/QuantumUser/Simulation/DataGraph/{subfolder}/{enumDef.TypeName}.cs";
-                else
-                    csPath = Path.Combine(outputBasePath, subfolder, $"{enumDef.TypeName}.cs");
-
-                PathUtilities.EnsureDirectory(csPath);
-                File.WriteAllText(csPath, genResult.Value);
-                log.LogSuccess($"Generated: {csPath} ({enumDef.Members.Count} members)");
-
-                AssetDatabase.Refresh();
-                log.Complete(true);
-                return true;
-            }
-            catch (Exception ex)
-            {
-                log.LogError($"{kind} pipeline failed: {ex.Message}");
-                log.Complete(false);
-                return false;
-            }
-        }
-
-        /// <summary>
-        /// Invokes BlobCodeGenerator through reflection since DataGraph.Editor
-        /// does not reference DataGraph.Blob directly.
-        /// </summary>
-        private static Result<List<string>> InvokeBlobCodeGen(
-            ParseableGraph graph, string outputPath, string graphName)
-        {
-            try
-            {
-                var gen = new CodeGen.BlobCodeGenerator();
-                var files = new List<string>();
-
-                var entriesResult = gen.GenerateEntries(graph);
-                if (entriesResult.IsFailure)
-                    return Result<List<string>>.Failure(entriesResult.Error);
-
-                var blobCsPath = Path.Combine(outputPath, $"{graphName}Blob.cs");
-                PathUtilities.EnsureDirectory(blobCsPath);
-                File.WriteAllText(blobCsPath, entriesResult.Value);
-                files.Add(blobCsPath);
-
-                var dbResult = gen.GenerateDatabase(graph);
-                if (dbResult.IsFailure)
-                    return Result<List<string>>.Failure(dbResult.Error);
-
-                var dbCsPath = Path.Combine(outputPath, $"{graphName}BlobDatabase.cs");
-                File.WriteAllText(dbCsPath, dbResult.Value);
-                files.Add(dbCsPath);
-
-                var builderResult = gen.GenerateBuilder(graph);
-                if (builderResult.IsFailure)
-                    return Result<List<string>>.Failure(builderResult.Error);
-
-                var builderCsPath = Path.Combine(outputPath, $"{graphName}BlobBuilder.cs");
-                File.WriteAllText(builderCsPath, builderResult.Value);
-                files.Add(builderCsPath);
-
-                return Result<List<string>>.Success(files);
-            }
-            catch (Exception ex)
-            {
-                return Result<List<string>>.Failure($"Blob code generation failed: {ex.Message}");
-            }
-        }
     }
 }
